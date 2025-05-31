@@ -140,7 +140,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\fft\ClFftBase.cpp" />
+    <ClCompile Include="src\fft\cl_fft_base.cpp" />
     <ClCompile Include="src\fft\Wrapper_clFFT.cpp" />
     <ClCompile Include="TestClFFT01.cpp" />
   </ItemGroup>
@@ -148,7 +148,7 @@
     <ClInclude Include="..\clFFT\src\include\clFFT.h" />
     <ClInclude Include="src\fft\CalcTimeOpenCl.h" />
     <ClInclude Include="src\fft\SDataTimes.h" />
-    <ClInclude Include="src\fft\ClFftBase.h" />
+    <ClInclude Include="src\fft\cl_fft_base.h" />
     <ClInclude Include="src\fft\data_fft.h" />
     <ClInclude Include="src\fft\fft_data_time.h" />
     <ClInclude Include="src\fft\Wrapper_clFFT.h" />

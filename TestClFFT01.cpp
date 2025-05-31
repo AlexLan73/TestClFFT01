@@ -69,13 +69,21 @@ int main()
     // 3. Упаковываем вектор в std::any и создаём unique_ptr<std::any>
     auto correct_data = std::make_unique<std::any>(std::move(data));
 
+/*
     data_fft _data_fft1 = data_fft();
     std::any any_data_fft1 = _data_fft1;
 
     // 4. Передаём в метод
-    _wrapper_clfft->Calculate(std::move(correct_data), any_data_fft1, N, M );
+    _wrapper_clfft->calculate(std::move(correct_data), any_data_fft1, N, M );
+    _data_fft1 = std::any_cast<data_fft>(any_data_fft1);
+*/
+   
+    fft_data_time _fft_data_time = fft_data_time();
+    std::any any_fft_data_time = _fft_data_time;
+    _wrapper_clfft->calculate(std::move(correct_data), any_fft_data_time, N, M); 
+    _fft_data_time = std::any_cast<fft_data_time>(any_fft_data_time);
 
-
+    int jj = 1;
 
 
 
@@ -88,10 +96,9 @@ int main()
     _calc = std::any_cast<calc_time_opencl>(any_calc);
 */
 
-    data_fft _data_fft = data_fft();
-    std::any any_data_fft = _data_fft;
-    _wrapper_clfft->read_data(any_data_fft);
-    _data_fft = std::any_cast<data_fft>(any_data_fft);
+//    data_fft _data_fft = data_fft();
+//    std::any any_data_fft = _data_fft;
+//    _data_fft = std::any_cast<data_fft>(any_data_fft);
 
 /*
     fft_data_time _fft_data_time = fft_data_time();

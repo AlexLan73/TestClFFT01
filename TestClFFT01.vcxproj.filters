@@ -27,7 +27,7 @@
     <ClCompile Include="src\fft\Wrapper_clFFT.cpp">
       <Filter>Исходные файлы\src\fft</Filter>
     </ClCompile>
-    <ClCompile Include="src\fft\ClFftBase.cpp">
+    <ClCompile Include="src\fft\cl_fft_base.cpp">
       <Filter>Исходные файлы\src\fft</Filter>
     </ClCompile>
   </ItemGroup>
@@ -35,7 +35,7 @@
     <ClInclude Include="src\fft\Wrapper_clFFT.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="src\fft\ClFftBase.h">
+    <ClInclude Include="src\fft\cl_fft_base.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="..\clFFT\src\include\clFFT.h">

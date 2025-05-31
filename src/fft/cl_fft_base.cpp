@@ -1,11 +1,10 @@
-﻿#include "ClFftBase.h"
+﻿#include "cl_fft_base.h"
 
-namespace std
-{
-    class type_index;
-}
 
-my_fft::ClFftBase::ClFftBase()
+
+
+// ReSharper disable once CppPossiblyUninitializedMember
+my_fft::cl_fft_base::cl_fft_base()
 {
 // 1. Получаем платформу
     cl_uint num_platforms = 0;
@@ -55,7 +54,7 @@ my_fft::ClFftBase::ClFftBase()
 }
 
 
-void my_fft::ClFftBase::Calculate(std::unique_ptr<std::any> data, std::any& t, size_t n, size_t m)
+void my_fft::cl_fft_base::calculate(std::unique_ptr<std::any> data, std::any& t, size_t n, size_t m)
 {
     process_type(t.type());
     system_clock::time_point t_start = system_clock::now();
@@ -67,8 +66,8 @@ void my_fft::ClFftBase::Calculate(std::unique_ptr<std::any> data, std::any& t, s
     const auto& vec_ref = std::any_cast<const v_fft&>(*data);
     auto input_data = const_cast<v_fft*>(&vec_ref); // если нужен неконстант
 
-    //    cl_mem inputBuffer = clCreateBuffer(context_, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float2) * inputData.size(), inputData.data(), &err_);
-    cl_mem inputBuffer = clCreateBuffer(context_, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float2) * n_*m_, input_data->data(), &err_);
+    //    cl_mem input_buffer_ = clCreateBuffer(context_, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float2) * inputData.size(), inputData.data(), &err_);
+    input_buffer_ = clCreateBuffer(context_, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float2) * n_*m_, input_data->data(), &err_);
     cl_mem outputBuffer = clCreateBuffer(context_, CL_MEM_READ_WRITE, sizeof(cl_float2) * n_ * m_, nullptr, &err_);
 
     if (err_ != CL_SUCCESS)
@@ -88,7 +87,7 @@ void my_fft::ClFftBase::Calculate(std::unique_ptr<std::any> data, std::any& t, s
 
     if(m_ > 1 )
     {
-        err_ = clEnqueueWriteBuffer(queue_, inputBuffer, CL_TRUE, 0, sizeof(cl_float2) * m_ * n_,
+        err_ = clEnqueueWriteBuffer(queue_, input_buffer_, CL_TRUE, 0, sizeof(cl_float2) * m_ * n_,
             input_data->data(), 0, nullptr, nullptr);
         if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to write buffer" + std::to_string(err_));
     }
@@ -121,102 +120,31 @@ void my_fft::ClFftBase::Calculate(std::unique_ptr<std::any> data, std::any& t, s
     // 8. Выполняем прямое FFT с профилированием
     cl_event event;
     err_ = clfftEnqueueTransform(plan, CLFFT_FORWARD, 1, &queue_, 0, nullptr, &event,
-        &inputBuffer, &outputBuffer, nullptr);
+        &input_buffer_, &outputBuffer, nullptr);
     if (err_ != CL_SUCCESS)  throw std::runtime_error("Launch (run) error FFT: " + std::to_string(err_));     // Ошибка запуска
 
     clFinish(queue_);
     system_clock::time_point t_end = system_clock::now();
-    time_opencl = calc_Time_OpenCl(event);
-    time_opencl.set_time_average(time_average_value(&t_start, &t_end));
+    time_opencl_ = calc_Time_OpenCl(event);
+    time_opencl_.set_time_average(time_average_value(&t_start, &t_end));
 
     if (s_data_times_.is_time && (!s_data_times_.is_data))
     {
-        t = time_opencl;
+        t = time_opencl_;
         return;
     }
-
-    // 9. Считываем результат
-
-    std::vector<cl_float2> outputData = v_fft(n_*m_);
-
-    err_ = clEnqueueReadBuffer(queue_, inputBuffer, CL_TRUE, 0, sizeof(cl_float2) * n_ * m_,
-        outputData.data(), 0, nullptr, nullptr);
-    if (err_ != CL_SUCCESS) throw std::runtime_error("Buffer read error: " + std::to_string(err_));     //  Ошибка чтения буфера
-
-
-    if(m_==1)
-    {
-#pragma omp parallel for
-        //std::vector<float> amplitudes(n_);
-        auto amplitudes = std::make_shared<std::vector<float>>(n_);
-        for (size_t n = 0; n < n_; ++n) {
-            float real = outputData[m * n_ + n].x;
-            float imag = outputData[m * n_ + n].y;
-            (*amplitudes)[n] = std::sqrt(real * real + imag * imag);
-        }
-
-        if (s_data_times_.is_time) // данные и время
-        {
-            fft_data_time _fft_data_time = fft_data_time();
-            _fft_data_time.calc_time_opencl_ = time_opencl;
-            _fft_data_time.data_fft_ = data_fft();
-            _fft_data_time.data_fft_.data_one_am = std::move(amplitudes);
-            t = _fft_data_time;
-            return;
-        }
-        else  // данные
-        {
-            data_fft data_fft_ = data_fft();
-            data_fft_.data_one_am = std::move(amplitudes);
-            t = data_fft_;
-            return;
-        }
-
-
-    } else
-    {
-#pragma omp parallel for
-//        std::vector<std::vector<float>> amplitudes(m_, std::vector<float>(n_));
-
-        using v_fft_many_am = std::vector<std::vector<float>>;
-        std::shared_ptr<v_fft_many_am> amplitudes = std::make_shared<v_fft_many_am>(m_, std::vector<float>(n_));
-
-        for (size_t m = 0; m < m_; ++m) {
-            for (size_t n = 0; n < n_; ++n) {
-                const float real = outputData[m * n_ + n].x;
-                const float image = outputData[m * n_ + n].y;
-                (*amplitudes)[m][n] = std::sqrt(real * real + image * image);
-            }
-        }
-
-        if (s_data_times_.is_time) // данные и время
-        {
-            auto _fft_data_time = fft_data_time();
-            _fft_data_time.calc_time_opencl_ = time_opencl;
-            _fft_data_time.data_fft_ = data_fft();
-            _fft_data_time.data_fft_.data_many_am = std::move(amplitudes);
-            t = _fft_data_time;
-            return;
-        }
-        else  // данные
-        {
-            data_fft data_fft_ = data_fft();
-            data_fft_.data_many_am = std::move(amplitudes);
-            t = data_fft_;
-            return;
-        }
-
-    }
+    process_fft_result(t);
+    return;
 }
 
-void my_fft::ClFftBase::process_type(const std::type_info& type) {
+void my_fft::cl_fft_base::process_type(const std::type_info& type) {
     if (const auto it = typeActions_.find(std::type_index(type)); it != typeActions_.end()) 
         it->second(); // Вызов соответствующей функции
     else
         throw std::runtime_error("Error return Class or Struct. ");
 }
 
-calc_time_opencl my_fft::ClFftBase::calc_Time_OpenCl(cl_event event)
+calc_time_opencl my_fft::cl_fft_base::calc_Time_OpenCl(cl_event event)
 {
     cl_ulong start = 0, end = 0;
     cl_ulong queued = 0, submit = 0;
@@ -238,101 +166,77 @@ calc_time_opencl my_fft::ClFftBase::calc_Time_OpenCl(cl_event event)
     return { queueTime, submitTime, elapsedMs };
 }
 
-void my_fft::ClFftBase::read_data(std::any& t)
+void my_fft::cl_fft_base::process_fft_result(std::any& t)
 {
-    process_type(t.type());
-    system_clock::time_point t_start = system_clock::now();
-///*
-//    if (m_ == 1)
-//    {
-//        // 8. Выполняем прямое FFT с профилированием
-//        err_ = clfftEnqueueTransform(plan_, CLFFT_FORWARD, 1, &queue_, 0, nullptr, &event,
-//            &inputBuffer, &outputBuffer, nullptr);
-//        if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to enqueue FFT");
-//
-//        clFinish(queue_);
-//
-//        // Получаем время выполнения
-//        //v_fft vec_one_ = v_fft(n_);
-//        err_ = clEnqueueReadBuffer(queue_, buffer_, CL_TRUE, 0, sizeof(cl_float2) * n_, input_data_one_.data(),
-//            0, nullptr, nullptr);
-//        if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to read buffer");
-//    }
-//    else
-//    {
-//
-//    }
-//*/
-//    // 8. Выполняем прямое FFT с профилированием
-//    cl_event event;
-//    err_ = clfftEnqueueTransform(plan_, CLFFT_FORWARD, 1, &queue_, 0, nullptr, &event,
-//        &inputBuffer, &outputBuffer, nullptr);
-//    if (err_ != CL_SUCCESS) { std::cerr << "Ошибка запуска FFT\n"; return; }
-//
-//    clFinish(queue_);
-//    // �������� ����� ����������
-//    calc_time_opencl  time_opencl;
-//
-//    // 9. Считываем результат
-//    if (m_ == 1)
-//    {
-////        v_fft vec_one_ = v_fft(n_);
-//        err_ = clEnqueueReadBuffer(queue_, outputBuffer, CL_TRUE, 0, sizeof(float) * outputData.size(),
-//            outputData.data(), 0, nullptr, nullptr);
-//        if (err_ != CL_SUCCESS) {
-//            std::cerr << "������ ������ ������\n";
-//            return;
-//        }
-//        system_clock::time_point t_end = system_clock::now();
-//
-//        time_opencl = calc_Time_OpenCl(event);
-//        time_opencl.set_time_average(time_average_value(&t_start, &t_end));
-//
-//        if (s_data_times_.is_time && (!s_data_times_.is_data))
-//        {
-//            t = time_opencl;
-//            return; 
-//        }
-//
-//        if (s_data_times_.is_data && (!s_data_times_.is_time))
-//        {
-//            data_fft data_fft_ = data_fft();
-//            if(m_ == 1)
-//            {
-//                data_fft_.data_one = std::make_shared<v_fft>(input_data_one_);
-//                t = data_fft_;
-//                return;
-//            } else
-//            {
-//                //            std::unique_ptr<v_fft> data_one = nullptr;         std::unique_ptr<v_fft_many> data_many = nullptr;
-//                return;
-//            }
-//        }
-//
-//        if (s_data_times_.is_data && s_data_times_.is_time)
-//        {
-//            fft_data_time _fft_data_time = fft_data_time();
-//            _fft_data_time.calc_time_opencl_ = time_opencl;
-//            _fft_data_time.data_fft_ = data_fft();
-//            _fft_data_time.data_fft_.data_one = std::make_shared<v_fft>(input_data_one_);
-//
-//            t = _fft_data_time;
-//            return;
-//        }
-//    }
+    // 9. Считываем результат
+    std::vector<cl_float2> outputData(n_ * m_);
+    err_ = clEnqueueReadBuffer(queue_, input_buffer_, CL_TRUE, 0, sizeof(cl_float2) * n_ * m_,
+        outputData.data(), 0, nullptr, nullptr);
+    if (err_ != CL_SUCCESS)
+        throw std::runtime_error("Buffer read error: " + std::to_string(err_));
+
+
+    if (m_ == 1) {
+        auto amplitudes = std::make_shared<std::vector<float>>(n_);
+#pragma omp parallel for
+        for (size_t n = 0; n < n_; ++n) {
+            float real = outputData[n].x;
+            float imag = outputData[n].y;
+            (*amplitudes)[n] = std::sqrt(real * real + imag * imag);
+        }
+
+        if (s_data_times_.is_time) {
+            fft_data_time _fft_data_time;
+            _fft_data_time.calc_time_opencl_ = time_opencl_;
+            _fft_data_time.data_fft_ = data_fft();
+            _fft_data_time.data_fft_.data_one_am = std::move(amplitudes);
+            t = _fft_data_time;
+            return;
+        }
+        else {
+            data_fft data_fft_;
+            data_fft_.data_one_am = std::move(amplitudes);
+            t = data_fft_;
+            return;
+        }
+    }
+    else {
+        using v_fft_many_am = std::vector<std::vector<float>>;
+        auto amplitudes = std::make_shared<v_fft_many_am>(m_, std::vector<float>(n_));
+#pragma omp parallel for
+        for (size_t m = 0; m < m_; ++m) {
+            for (size_t n = 0; n < n_; ++n) {
+                float real = outputData[m * n_ + n].x;
+                float imag = outputData[m * n_ + n].y;
+                (*amplitudes)[m][n] = std::sqrt(real * real + imag * imag);
+            }
+        }
+
+        if (s_data_times_.is_time) {
+            fft_data_time _fft_data_time;
+            _fft_data_time.calc_time_opencl_ = time_opencl_;
+            _fft_data_time.data_fft_ = data_fft();
+            _fft_data_time.data_fft_.data_many_am = std::move(amplitudes);
+            t = _fft_data_time;
+            return;
+        }
+        else {
+            data_fft data_fft_;
+            data_fft_.data_many_am = std::move(amplitudes);
+            t = data_fft_;
+        }
+    }
 }
 
-
-my_fft::ClFftBase::~ClFftBase()
+my_fft::cl_fft_base::~cl_fft_base()
 {
-    // 9. ����������� OpenCL �������
-    clReleaseMemObject(buffer_);
+    // clear params OpenCL 
+    clReleaseMemObject(input_buffer_);
     clReleaseCommandQueue(queue_);
     clReleaseContext(context_);
-
 }
 
-string my_fft::ClFftBase::time_average_value(system_clock::time_point* t_start, system_clock::time_point* t_end)
+string my_fft::cl_fft_base::time_average_value(system_clock::time_point* t_start, system_clock::time_point* t_end)
 {
     //system_clock::time_point tstart = system_clock::now();
     //std::this_thread::sleep_for(milliseconds(1000));
@@ -365,15 +269,15 @@ string my_fft::ClFftBase::time_average_value(system_clock::time_point* t_start, 
 }
 
 
-void my_fft::ClFftBase::print_data_test(data_fft data)
+void my_fft::cl_fft_base::print_data_test(data_fft data)
 {
 }
 
-void my_fft::ClFftBase::print_data_test(fft_data_time data)
+void my_fft::cl_fft_base::print_data_test(fft_data_time data)
 {
 }
 
-void my_fft::ClFftBase::print_data_test(calc_time_opencl times)
+void my_fft::cl_fft_base::print_data_test(calc_time_opencl times)
 {
 }
 

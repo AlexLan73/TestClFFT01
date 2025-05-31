@@ -8,11 +8,11 @@
 #include <fcntl.h>
 #include <io.h>
 
-#include "ClFftBase.h"
+#include "cl_fft_base.h"
 
 namespace my_fft
 {
-    class Wrapper_clFFT :public my_fft::ClFftBase
+    class Wrapper_clFFT :public my_fft::cl_fft_base
     {
     public:
         Wrapper_clFFT();
