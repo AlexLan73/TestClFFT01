@@ -1,0 +1,349 @@
+﻿#include "ClFftBase.h"
+
+namespace std
+{
+    class type_index;
+}
+
+my_fft::ClFftBase::ClFftBase()
+{
+    err_ = clGetPlatformIDs(1, &platform_, nullptr);
+    if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to get platform");
+
+    err_ = clGetDeviceIDs(platform_, CL_DEVICE_TYPE_GPU, 1, &device_, nullptr);
+    if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to get device");
+
+    context_ = clCreateContext(nullptr, 1, &device_, nullptr, nullptr, &err_);
+    if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to create context");
+
+    constexpr cl_queue_properties props[] = { CL_QUEUE_PROPERTIES, CL_QUEUE_PROFILING_ENABLE, CL_QUEUE_ON_DEVICE, 0 };
+
+    queue_ = clCreateCommandQueueWithProperties(context_, device_, props, &err_);
+    if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to create queue");
+
+    // 2. ������������� clFFT
+    clfftSetupData fft_setup;
+    err_ = clfftInitSetupData(&fft_setup);
+    if (err_ != CL_SUCCESS) throw std::runtime_error("clFFT setup init failed");
+
+    err_ = clfftSetup(&fft_setup);
+    if (err_ != CL_SUCCESS) throw std::runtime_error("clFFT setup failed");
+
+    typeActions_ = {
+            { std::type_index(typeid(calc_time_opencl)), [this]() { s_data_times_.is_data = false;  s_data_times_.is_time = true;  } },
+            { std::type_index(typeid(data_fft)),       [this]() { s_data_times_.is_data = true;  s_data_times_.is_time = false;  } },
+            { std::type_index(typeid(fft_data_time)),  [this]() { s_data_times_.is_data = true;  s_data_times_.is_time = true; } }
+    };
+}
+
+void my_fft::ClFftBase::load_data(std::unique_ptr<std::any> data, size_t n, size_t m)
+{
+    n_ = n;
+    m_ = m;
+//    data_ = std::move(e_data);
+
+    if (m_ < 1)
+    {
+        throw std::runtime_error("Failed to bake M < 1 ");
+    }
+    else if (m_ == 1)
+    {
+//        auto input_data_one_ = std::any_cast<const v_fft>(*data_);
+//        auto input_data_one_ = std::any_cast<const v_fft>(*std::move(data));
+//        d_vec_one = std::make_shared<v_fft>(std::move(data));
+//        v_fft vec_one_;
+        try 
+        {
+            // Создаём shared_ptr на копию вектора
+            // d_vec_one = std::make_shared<v_fft>(std::any_cast<const v_fft&>(*data));
+            input_data_one_ = std::any_cast<const v_fft>(*std::move(data));
+
+            // Теперь d_vec_one хранит копию данных из any
+        }
+        catch (const std::bad_any_cast& e) {
+            throw std::runtime_error(std::string("Bad any_cast: ") + e.what());
+        }
+
+//        auto vec_one_ = d_vec_one
+        buffer_ = clCreateBuffer(context_, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float2) * n_, vec_one_.data(), &err_);
+
+        if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to create buffer");
+
+        err_ = clEnqueueWriteBuffer(queue_, buffer_, CL_TRUE, 0, sizeof(cl_float2) * n_, vec_one_.data(),
+            0, nullptr, nullptr);
+        if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to write buffer");
+
+    }
+    else
+    {
+        v_fft_many vec_many_ ;// = std::any_cast<const v_fft_many>(*data_);
+        try
+        {
+            // Создаём shared_ptr на копию вектора
+            vec_many_ = std::any_cast<const v_fft_many>(std::any_cast<const v_fft_many&>(*data));
+            // Теперь d_vec_one хранит копию данных из any
+        }
+        catch (const std::bad_any_cast& e) {
+            throw std::runtime_error(std::string("Bad any_cast: ") + e.what());
+        }
+
+    }
+/*
+    if(m_ == 1)
+    {
+        input_data_one_ = std::any_cast<const v_fft>(datax); 
+    }else
+    {
+        v_fft_many* input_data_many_;
+        v_fft_many* input_data_many_;
+        = std::vector<cl_float2>;
+        using v_fft_many
+
+
+    }
+*/
+}
+
+
+void my_fft::ClFftBase::func_plan()
+{
+    // 5. ������� ���� FFT
+    err_ = clfftCreateDefaultPlan(&plan_, context_, CLFFT_1D, &n_);
+    if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to create FFT plan");
+
+    err_ = clfftSetPlanPrecision(plan_, CLFFT_SINGLE);
+    err_ |= clfftSetLayout(plan_, CLFFT_COMPLEX_INTERLEAVED, CLFFT_COMPLEX_INTERLEAVED);
+    err_ |= clfftSetResultLocation(plan_, CLFFT_INPLACE);
+    if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to set FFT plan parameters");
+
+    err_ = clfftBakePlan(plan_, 1, &queue_, nullptr, nullptr);
+    if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to bake FFT plan");
+
+}
+
+void my_fft::ClFftBase::process_type(const std::type_info& type) {
+    if (const auto it = typeActions_.find(std::type_index(type)); it != typeActions_.end()) 
+        it->second(); // Вызов соответствующей функции
+    else
+        throw std::runtime_error("Error return Class or Struct. ");
+}
+
+calc_time_opencl my_fft::ClFftBase::calc_Time_OpenCl(cl_event event)
+{
+    cl_ulong start = 0, end = 0;
+    cl_ulong queued = 0, submit = 0;
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(start), &start, nullptr);
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(end), &end, nullptr);
+
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_QUEUED, sizeof(cl_ulong), &queued, nullptr);
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_SUBMIT, sizeof(cl_ulong), &submit, nullptr);
+
+    const double queueTime = (submit - queued) * 1e-3;    // ����� � ������� (���)
+    const double submitTime = (start - submit) * 1e-3;   // ����� �������� ����� �������� (���)
+    double elapsedMs = (end - start) * 1e-3;
+
+    printf(" - FFT count N = %zu point \n", n_);
+    printf("Time waite in queue (mks): %f mks\n", queueTime);
+    printf("Time waite load in queue (mks): %f mks\n", submitTime);
+    std::cout << "Time calc FFT mks: " << elapsedMs << " ���\n";
+
+    return { queueTime, submitTime, elapsedMs };
+}
+
+/* !!! привер !!!
+    if (t.type() == typeid(calc_Time_OpenCl)) { int iii1 = 1; }
+    if constexpr (std::is_same_v<T, data_fft>) { s_data_times_ = e_data;}
+ */
+
+
+void my_fft::ClFftBase::read_data(std::any& t)
+{
+    process_type(t.type());
+    system_clock::time_point t_start = system_clock::now();
+
+    if (m_ == 1)
+    {
+        // 6. ��������� FFT
+        err_ = clfftEnqueueTransform(plan_, CLFFT_FORWARD, 1, &queue_, 0, nullptr,
+            nullptr, &buffer_, nullptr, nullptr);
+        if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to enqueue FFT");
+
+        clFinish(queue_);
+
+        // 7. ��������� ���������
+        v_fft vec_one_ = v_fft(n_);
+        err_ = clEnqueueReadBuffer(queue_, buffer_, CL_TRUE, 0, sizeof(cl_float2) * n_, vec_one_.data(),
+            0, nullptr, nullptr);
+//        err_ = clEnqueueReadBuffer(queue_, buffer_, CL_TRUE, 0, sizeof(cl_float2) * n_, m_==1? d_vec_one->data(): d_vec_one->data(),
+//            0, nullptr, nullptr);
+
+        if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to read buffer");
+        //        return input_data_one_;
+    }
+    else
+    {
+
+    }
+
+    // 8. ��������� ������ FFT � ���������������
+    cl_event event;
+    err_ = clfftEnqueueTransform(plan_, CLFFT_FORWARD, 1, &queue_, 0, nullptr, &event,
+        &buffer_, nullptr, nullptr);
+    if (err_ != CL_SUCCESS) {
+        std::cerr << "Error in profiling FFT \n";
+        return;
+    }
+
+    clFinish(queue_);
+    // �������� ����� ����������
+    calc_time_opencl  time_opencl;
+
+    // 9. ��������� ���������
+    if (m_ == 1)
+    {
+        v_fft vec_one_ = v_fft(n_);
+        err_ = clEnqueueReadBuffer(queue_, buffer_, CL_TRUE, 0, sizeof(cl_float2) * n_, vec_one_.data(), 0, nullptr, nullptr);
+        if (err_ != CL_SUCCESS) {
+            std::cerr << "������ ������ ������\n";
+            return;
+        }
+        system_clock::time_point t_end = system_clock::now();
+
+        time_opencl = calc_Time_OpenCl(event);
+        time_opencl.set_time_average(time_average_value(&t_start, &t_end));
+
+        if (s_data_times_.is_time && (!s_data_times_.is_data))
+        {
+            t = time_opencl;
+            return; 
+        }
+
+        if (s_data_times_.is_data && (!s_data_times_.is_time))
+        {
+            data_fft data_fft_ = data_fft();
+            if(m_ == 1)
+            {
+                data_fft_.data_one = std::make_shared<v_fft>(vec_one_);
+                t = data_fft_;
+                return;
+            } else
+            {
+                //            std::unique_ptr<v_fft> data_one = nullptr;
+                //            std::unique_ptr<v_fft_many> data_many = nullptr;
+
+                return;
+
+            }
+        }
+
+        if (s_data_times_.is_data && s_data_times_.is_time)
+        {
+            fft_data_time _fft_data_time = fft_data_time();
+            _fft_data_time.calc_time_opencl_ = time_opencl;
+            _fft_data_time.data_fft_ = data_fft();
+            _fft_data_time.data_fft_.data_one = std::make_shared<v_fft>(vec_one_);
+
+            t = _fft_data_time;
+            return;
+
+//            time_opencl.set_time_average(time_average_value(&t_start, &t_end));
+        }
+
+//        switch (s_data_times_)
+//        {
+//        case e_data:
+//        {
+//            data_fft  data_fft_ = data_fft();
+//            if (m_ == 1)
+//            {
+//                data_fft_.data_one = std::make_unique<v_fft>(*input_data_one_);
+//            }
+//            else
+//            {
+////                data_fft_.data_many = std::make_unique<v_fft_many>(*input_data_one_);
+//            }
+//            return;
+//        }
+//        case e_times:
+//        {
+//            return ;
+//        }
+//        case e_data_times:
+//        {
+//            fft_data_time fft_data_time_ = fft_data_time();
+//            fft_data_time_.data_fft_ = data_fft();
+//            if (m_ == 1)
+//            {
+//                fft_data_time_.data_fft_.data_one = *input_data_one_;
+//            }
+//            else
+//            {
+////                fft_data_time_.data_fft_.data_many = *input_data_many_;
+//            }
+//
+//            fft_data_time_.calc_time_opencl_ = time_opencl;
+        //    return ;
+        //}
+        //default: break;
+
+        //}
+
+    }
+
+}
+
+
+my_fft::ClFftBase::~ClFftBase()
+{
+    // 9. ����������� OpenCL �������
+    clReleaseMemObject(buffer_);
+    clReleaseCommandQueue(queue_);
+    clReleaseContext(context_);
+
+}
+
+string my_fft::ClFftBase::time_average_value(system_clock::time_point* t_start, system_clock::time_point* t_end)
+{
+    //system_clock::time_point tstart = system_clock::now();
+    //std::this_thread::sleep_for(milliseconds(1000));
+    //system_clock::time_point tend = system_clock::now();
+
+    system_clock::time_point tstart = *t_start;
+    system_clock::time_point tend = *t_end;
+
+    const auto duration = tend - tstart;
+    const auto half_duration = duration / 2;
+    const system_clock::time_point tmed = tstart + half_duration;
+
+    const std::time_t tmed_time_t = system_clock::to_time_t(tmed);
+
+    std::tm tm;
+    localtime_s(&tm, &tmed_time_t);  // ���������� ������ localtime
+
+    auto ms = duration_cast<milliseconds>(tmed.time_since_epoch()) % 1000;
+
+    std::ostringstream oss;
+    oss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
+    oss << '.' << std::setfill('0') << std::setw(3) << ms.count();
+
+    std::string datetime_str = oss.str();
+
+    //    std::cout << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
+    //    std::cout << '.' << std::setfill('0') << std::setw(3) << ms.count() << std::endl;
+
+    return datetime_str;
+}
+
+
+void my_fft::ClFftBase::print_data_test(data_fft data)
+{
+}
+
+void my_fft::ClFftBase::print_data_test(fft_data_time data)
+{
+}
+
+void my_fft::ClFftBase::print_data_test(calc_time_opencl times)
+{
+}
+
