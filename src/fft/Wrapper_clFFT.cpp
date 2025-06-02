@@ -1,9 +1,9 @@
 ﻿#include "Wrapper_clFFT.h"
 
-my_fft::wrapper_cl_fft::wrapper_cl_fft():cl_fft_base()
+my_fft::wrapper_cl_fft::wrapper_cl_fft()
 {
     //SetConsoleOutputCP(CP_UTF8); //_setmode(_fileno(stdout), _O_U8TEXT); //std::wcout << L" ---  Старт программы Wrapper_clFFT  --- \n";
-
+    cl_fft_base_ = std::make_unique<cl_fft_base>();
     running_ = false;
 }
 
@@ -14,8 +14,7 @@ void my_fft::wrapper_cl_fft::inicial_vector(size_t n, size_t m)
     std::any any_fft_data_time = _fft_data_time;
 //    calculate(std::move(data), any_fft_data_time, n, m);
     auto correct_data = std::make_shared<v_fft>(data);
-
-    calculate(std::move(correct_data), any_fft_data_time, n, m);
+    cl_fft_base_->calculate(std::move(correct_data), any_fft_data_time, n, m);
     _fft_data_time = std::any_cast<fft_data_time>(any_fft_data_time);
 
     auto dd = 1;

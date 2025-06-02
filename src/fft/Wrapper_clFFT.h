@@ -17,18 +17,19 @@
 
 namespace my_fft
 {
-    class wrapper_cl_fft :public my_fft::cl_fft_base
+    class wrapper_cl_fft    //:public my_fft::cl_fft_base
     {
     public:
         wrapper_cl_fft();
         void inicial_vector(size_t n, size_t m = 1);
-        ~wrapper_cl_fft() override;
+        ~wrapper_cl_fft();
         void test_boost();
         void start_thread();
         void stop_thread();
         void pause();
         void resume();
         void thread_func();
+        std::unique_ptr<cl_fft_base> cl_fft_base_;
 
 
     private:
@@ -40,6 +41,7 @@ namespace my_fft
         boost::mutex pause_mutex_;
         boost::condition_variable pause_cond_;
         v_fft data;
+
     };
 
 }

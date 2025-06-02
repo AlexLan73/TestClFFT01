@@ -32,7 +32,7 @@ int main()
     std::unique_ptr<my_fft::wrapper_cl_fft> _wrapper_clfft = std::make_unique<my_fft::wrapper_cl_fft>();
     std::unordered_map<std::string, std::any> dict;
     dict["print"] = true;
-    _wrapper_clfft->set_params(dict);
+    _wrapper_clfft->cl_fft_base_->set_params(dict);
 
     _wrapper_clfft->inicial_vector(1<<10, 10);
 
