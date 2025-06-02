@@ -53,6 +53,9 @@
     <ClInclude Include="src\fft\SDataTimes.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="src\fft\a_print_base.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="~!ClFftBase.txt" />
