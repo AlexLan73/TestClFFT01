@@ -46,7 +46,7 @@ namespace my_fft
     public:
         cl_fft_base();
 //        void calculate(std::unique_ptr<std::any> data_signal, std::any& t, size_t n, size_t m = 1);
-        void calculate(std::unique_ptr<std::any> data_signal, std::any& t, size_t n, size_t m = 1);
+        void calculate(std::shared_ptr<v_fft> data_signal, std::any& t, size_t n, size_t m = 1);
         
         void set_params(std::unordered_map<std::string, std::any> dict);
         ~cl_fft_base() override;

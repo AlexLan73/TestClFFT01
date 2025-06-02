@@ -34,7 +34,7 @@ int main()
     dict["print"] = true;
     _wrapper_clfft->set_params(dict);
 
-//    _wrapper_clfft->inicial_vector(1<<10);
+    _wrapper_clfft->inicial_vector(1<<10, 10);
 
 /*
     _wrapper_clfft->pause();
@@ -86,15 +86,15 @@ int main()
         data[i].y = 0.0f;
     }
 
-    // 3. Упаковываем вектор в std::any и создаём unique_ptr<std::any>
-    auto correct_data_one = std::make_unique<std::any>(std::move(data));
+    //// 3. Упаковываем вектор в std::any и создаём unique_ptr<std::any>
+    //auto correct_data_one = std::make_unique<std::any>(std::move(data));
 
-    fft_data_time _fft_data_time1 = fft_data_time();
-    std::any any_fft_data_time1 = _fft_data_time1;
-    //_wrapper_clfft->calculate(std::move(correct_data), any_fft_data_time, N, M);
-    // 4. Передаём в метод
-    _wrapper_clfft->calculate(std::move(correct_data_one), any_fft_data_time1, N, 1);
-    _fft_data_time1 = std::any_cast<fft_data_time>(any_fft_data_time1);
+    //fft_data_time _fft_data_time1 = fft_data_time();
+    //std::any any_fft_data_time1 = _fft_data_time1;
+    ////_wrapper_clfft->calculate(std::move(correct_data), any_fft_data_time, N, M);
+    //// 4. Передаём в метод
+    //_wrapper_clfft->calculate(std::move(correct_data_one), any_fft_data_time1, N, 1);
+    //_fft_data_time1 = std::any_cast<fft_data_time>(any_fft_data_time1);
 
 
 //

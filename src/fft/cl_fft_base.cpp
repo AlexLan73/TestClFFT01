@@ -63,40 +63,23 @@ my_fft::cl_fft_base::cl_fft_base()
 
 
 //void my_fft::cl_fft_base::calculate(std::unique_ptr<std::any> data, std::any& t, size_t n, size_t m)
-void my_fft::cl_fft_base::calculate(std::unique_ptr<std::any> data, std::any& t, size_t n, size_t m)
+void my_fft::cl_fft_base::calculate(std::shared_ptr<v_fft> data, std::any& t, size_t n, size_t m)
 {
     process_type(t.type());
     system_clock::time_point t_start = system_clock::now();
-    n_ = 1 << 10;
-    m_ = 1;
-//    n_ = n;  m_ = m;
+//    n_ = 1 << 10;     m_ = 1;
+    n_ = n;  m_ = m;
     if (is_print_ == true)
     {
         std::cerr << "count beam " << m_ << "\n";       // кол-во лучей
         std::cerr << "number of points " << n_ << "\n"; // кол-во точек
     }
 
-    // 5. Создаем буферы для данных (комплексные числа: float2)
-    // Реальная и мнимая части
-    const auto& vec_ref = std::any_cast<const v_fft&>(*data);
+    std::shared_ptr<v_fft> input_data_ = std::move(data);
 
-    //auto input_data = const_cast<v_fft*>(&vec_ref); // если нужен неконстант
-
-    //std::vector<cl_float2> data(N); // Обычный вектор, не unique_ptr
-    std::vector<cl_float2> input_data = v_fft(n_*m_);
-
-    // 2. Заполняем вектор
-    const float freq = 5 * 2 * pi_ / n_;
-    for (size_t i = 0; i < n_; ++i) {
-        float val = std::sin(freq * i);
-        input_data[i].x = val;
-        input_data[i].y = 0.0f;
-    }
     buffer_ = clCreateBuffer(context_, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float2) * n_ * m_,
-        input_data.data(), &err_);
+        input_data_->data(), &err_);
 
-//    buffer_ = clCreateBuffer(context_, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float2) * n_ * m_, input_data.data(), &err_);
-//    buffer_ = clCreateBuffer(context_, CL_MEM_READ_WRITE , sizeof(cl_float2) * n_ * m_, nullptr, &err_);
     outputBuffer = clCreateBuffer(context_, CL_MEM_READ_WRITE, sizeof(cl_float2) * n_ * m_, nullptr, &err_);
 
     if (err_ != CL_SUCCESS)
@@ -117,7 +100,7 @@ void my_fft::cl_fft_base::calculate(std::unique_ptr<std::any> data, std::any& t,
     if(m_ > 1 )
     {
         err_ = clEnqueueWriteBuffer(queue_, buffer_, CL_TRUE, 0, sizeof(cl_float2) * m_ * n_,
-            input_data.data(), 0, nullptr, nullptr);
+            input_data_->data(), 0, nullptr, nullptr);
         if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to write buffer" + std::to_string(err_));
     }
 
@@ -141,7 +124,6 @@ void my_fft::cl_fft_base::calculate(std::unique_ptr<std::any> data, std::any& t,
         err_ |= clfftSetResultLocation(plan, CLFFT_INPLACE);
         if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to set plan parameters" + std::to_string(err_));
     }
-
 
     // Запекаем план
     err_ = clfftBakePlan(plan, 1, &queue_, nullptr, nullptr);

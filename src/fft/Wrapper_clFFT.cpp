@@ -13,7 +13,7 @@ void my_fft::wrapper_cl_fft::inicial_vector(size_t n, size_t m)
     fft_data_time _fft_data_time = fft_data_time();
     std::any any_fft_data_time = _fft_data_time;
 //    calculate(std::move(data), any_fft_data_time, n, m);
-    auto correct_data = std::make_unique<std::any>(std::move(data));
+    auto correct_data = std::make_shared<v_fft>(data);
 
     calculate(std::move(correct_data), any_fft_data_time, n, m);
     _fft_data_time = std::any_cast<fft_data_time>(any_fft_data_time);
