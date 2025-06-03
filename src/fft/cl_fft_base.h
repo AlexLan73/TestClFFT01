@@ -38,7 +38,7 @@ using namespace std::chrono;
 using namespace std;
 using Complex = std::complex<float>;
 
-namespace my_fft
+namespace wrapper
 {
     class cl_fft_base:protected a_print_base
     // NOLINT(cppcoreguidelines-special-member-functions)

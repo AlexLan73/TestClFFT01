@@ -4,7 +4,7 @@
 
 
 // ReSharper disable once CppPossiblyUninitializedMember
-my_fft::cl_fft_base::cl_fft_base()
+wrapper::cl_fft_base::cl_fft_base()
 {
 // 1. Получаем платформу
     cl_uint num_platforms = 0;
@@ -62,8 +62,8 @@ my_fft::cl_fft_base::cl_fft_base()
 
 
 
-//void my_fft::cl_fft_base::calculate(std::unique_ptr<std::any> data, std::any& t, size_t n, size_t m)
-void my_fft::cl_fft_base::calculate(std::shared_ptr<v_fft> data, std::any& t, size_t n, size_t m)
+//void wrapper::cl_fft_base::calculate(std::unique_ptr<std::any> data, std::any& t, size_t n, size_t m)
+void wrapper::cl_fft_base::calculate(std::shared_ptr<v_fft> data, std::any& t, size_t n, size_t m)
 {
     process_type(t.type());
     system_clock::time_point t_start = system_clock::now();
@@ -160,7 +160,7 @@ void my_fft::cl_fft_base::calculate(std::shared_ptr<v_fft> data, std::any& t, si
     return;
 }
 
-void my_fft::cl_fft_base::set_params(std::unordered_map<std::string, std::any> dict)
+void wrapper::cl_fft_base::set_params(std::unordered_map<std::string, std::any> dict)
 {
     std::vector<std::string> keys;
     keys.reserve(dict.size()); // для эффективности
@@ -188,14 +188,14 @@ void my_fft::cl_fft_base::set_params(std::unordered_map<std::string, std::any> d
 
 }
 
-void my_fft::cl_fft_base::process_type(const std::type_info& type) {
+void wrapper::cl_fft_base::process_type(const std::type_info& type) {
     if (const auto it = typeActions_.find(std::type_index(type)); it != typeActions_.end()) 
         it->second(); // Вызов соответствующей функции
     else
         throw std::runtime_error("Error return Class or Struct. ");
 }
 
-calc_time_opencl my_fft::cl_fft_base::calc_Time_OpenCl(cl_event event)
+calc_time_opencl wrapper::cl_fft_base::calc_Time_OpenCl(cl_event event)
 {
     cl_ulong start = 0, end = 0;
     cl_ulong queued = 0, submit = 0;
@@ -219,7 +219,7 @@ calc_time_opencl my_fft::cl_fft_base::calc_Time_OpenCl(cl_event event)
     return { queueTime, submitTime, elapsedMs };
 }
 
-my_fft::cl_fft_base::~cl_fft_base()
+wrapper::cl_fft_base::~cl_fft_base()
 {
     // clear params OpenCL 
     clReleaseMemObject(buffer_);
@@ -227,7 +227,7 @@ my_fft::cl_fft_base::~cl_fft_base()
     clReleaseContext(context_);
 }
 
-string my_fft::cl_fft_base::time_average_value(const system_clock::time_point* t_start, const system_clock::time_point* t_end)
+string wrapper::cl_fft_base::time_average_value(const system_clock::time_point* t_start, const system_clock::time_point* t_end)
 {
     //std::this_thread::sleep_for(milliseconds(1000));
 
@@ -258,22 +258,22 @@ string my_fft::cl_fft_base::time_average_value(const system_clock::time_point* t
 }
 
 // считываем название метода
-my_fft::cl_fft_base::FuncType my_fft::cl_fft_base::getHandlerForType(const std::type_index& type) {
+wrapper::cl_fft_base::FuncType wrapper::cl_fft_base::getHandlerForType(const std::type_index& type) {
     if (const auto it = handlers_.find(type); it != handlers_.end())  return it->second;
     return nullptr;         // Нет обработчика для данного типа
 }
 
 // Примеры реализаций обработчиков
-void my_fft::cl_fft_base::return_calc_time_opencl(std::any& t) {    // Реализация обработки calc_time_opencl
+void wrapper::cl_fft_base::return_calc_time_opencl(std::any& t) {    // Реализация обработки calc_time_opencl
     t = time_opencl_;
 }
 
 // Реализация обработки data_fft
-void my_fft::cl_fft_base::return_data_fft(std::any& t){
+void wrapper::cl_fft_base::return_data_fft(std::any& t){
     t = convert_data();
 }
 
-void my_fft::cl_fft_base::return_fft_data_time(std::any& t) {
+void wrapper::cl_fft_base::return_fft_data_time(std::any& t) {
     // Реализация обработки fft_data_time
     fft_data_time _fft_data_time;
     _fft_data_time.calc_time_opencl_ = time_opencl_;
@@ -281,7 +281,7 @@ void my_fft::cl_fft_base::return_fft_data_time(std::any& t) {
     t = _fft_data_time;
 }
 
-data_fft my_fft::cl_fft_base::convert_data()
+data_fft wrapper::cl_fft_base::convert_data()
 {
     data_fft data_fft_;
     // 9. Считываем результат
@@ -320,71 +320,5 @@ data_fft my_fft::cl_fft_base::convert_data()
     return data_fft_;
 }
 
-
-/*
- 
- 
-     // 9. Считываем результат
-    std::vector<cl_float2> outputData(n_ * m_);
-    err_ = clEnqueueReadBuffer(queue_, input_buffer_, CL_TRUE, 0, sizeof(cl_float2) * n_ * m_,
-        outputData.data(), 0, nullptr, nullptr);
-    if (err_ != CL_SUCCESS)
-        throw std::runtime_error("Buffer read error: " + std::to_string(err_));
-
-
-    if (m_ == 1) {
-        auto amplitudes = std::make_shared<std::vector<float>>(n_);
-#pragma omp parallel for
-        for (size_t n = 0; n < n_; ++n) {
-            float real = outputData[n].x;
-            float imag = outputData[n].y;
-            (*amplitudes)[n] = std::sqrt(real * real + imag * imag);
-        }
-
-        if (s_data_times_.is_time) {
-            fft_data_time _fft_data_time;
-            _fft_data_time.calc_time_opencl_ = time_opencl_;
-            _fft_data_time.data_fft_ = data_fft();
-            _fft_data_time.data_fft_.data_one_am = std::move(amplitudes);
-            t = _fft_data_time;
-            return;
-        }
-        else {
-            data_fft data_fft_;
-            data_fft_.data_one_am = std::move(amplitudes);
-            t = data_fft_;
-            return;
-        }
-    }
-    else {
-        using v_fft_many_am = std::vector<std::vector<float>>;
-        auto amplitudes = std::make_shared<v_fft_many_am>(m_, std::vector<float>(n_));
-#pragma omp parallel for
-        for (size_t m = 0; m < m_; ++m) {
-            for (size_t n = 0; n < n_; ++n) {
-                float real = outputData[m * n_ + n].x;
-                float imag = outputData[m * n_ + n].y;
-                (*amplitudes)[m][n] = std::sqrt(real * real + imag * imag);
-            }
-        }
-
-        if (s_data_times_.is_time) {
-            fft_data_time _fft_data_time;
-            _fft_data_time.calc_time_opencl_ = time_opencl_;
-            _fft_data_time.data_fft_ = data_fft();
-            _fft_data_time.data_fft_.data_many_am = std::move(amplitudes);
-            t = _fft_data_time;
-            return;
-        }
-        else {
-            data_fft data_fft_;
-            data_fft_.data_many_am = std::move(amplitudes);
-            t = data_fft_;
-        }
-    }
-
- 
- 
- */
 
 
