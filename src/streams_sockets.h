@@ -56,6 +56,7 @@ namespace wrapper
         void inicial_vector(size_t n, size_t m = 1);
         ~streams_sockets();
         void test_boost();
+        void test_sockets();
         std::unique_ptr<cl_fft_base> cl_fft_base_;
         std::unique_ptr<DuplexNode> sockets_a_; // = std::make_unique<>()
         std::unique_ptr<DuplexNode> sockets_b_;

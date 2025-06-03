@@ -87,6 +87,13 @@ void wrapper::streams_sockets::test_boost()
     
 }
 
+void wrapper::streams_sockets::test_sockets()
+{
+    sockets_a_ = std::make_unique<DuplexNode>(io_a, 10000, 10001);
+    sockets_b_ = std::make_unique<DuplexNode>(io_a, 10001, 10000);
+
+}
+
 void wrapper::streams_sockets::test_1()
 {
     int n = 10;

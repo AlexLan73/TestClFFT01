@@ -68,7 +68,8 @@ int main()
 
 //    _wrapper_clfft->start_thread_socket();
 
-    _wrapper_clfft->test_boost();
+    //_wrapper_clfft->test_boost();
+    _wrapper_clfft->test_sockets();
 
     int ff = 1;
 
