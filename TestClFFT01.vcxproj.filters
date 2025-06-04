@@ -22,6 +22,9 @@
     <Filter Include="Исходные файлы\src\sockets">
       <UniqueIdentifier>{cbf12792-ea3e-48fa-8a98-3306eac0d11f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Исходные файлы\src\sockets\Test">
+      <UniqueIdentifier>{8df5304b-bb43-4065-907c-53fcbafdb5c7}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="TestClFFT01.cpp">
@@ -35,6 +38,9 @@
     </ClCompile>
     <ClCompile Include="src\sockets\DuplexNode.cpp">
       <Filter>Исходные файлы\src\sockets</Filter>
+    </ClCompile>
+    <ClCompile Include="src\sockets\Test\socket_test.cpp">
+      <Filter>Исходные файлы\src\sockets\Test</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -66,6 +72,9 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="src\wrap_thread.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\sockets\Test\socket_test.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

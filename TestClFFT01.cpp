@@ -16,6 +16,12 @@
 #include <iostream>
 #include <nvml.h>
 
+#include <iostream>
+#include <locale.h>
+#include <cstdlib>
+#include <iostream>
+#include <windows.h>
+#include <clocale>
 
 int main()
 {
@@ -55,9 +61,11 @@ int main()
     //    _setmode(_fileno(stdout), _O_U8TEXT);
 
     //    std::wcout << L"Тест программы clFFT!" << std::endl;
-    std::cout << "Test program clFFT!" << std::endl;
+
+//    SetConsoleCP(1251);
+//    SetConsoleOutputCP(1251);
     setlocale(LC_ALL, "Russian");  // NOLINT(cert-err33-c, concurrency-mt-unsafe)
-    //    std::cout << "Тест программы clFFT!" << std::endl;
+    std::cout << "Тест программы clFFT!" << std::endl;
 
 
     //    std::shared_ptr<Wrapper_clFFT> _wrapper_clfft = std::make_shared< Wrapper_clFFT>();

@@ -21,6 +21,7 @@
 #include "../src/fft/cl_fft_base.h"
 #include "sockets/DuplexNode.h"
 #include "wrap_thread.h"
+#include "sockets/Test/socket_test.h"
 
 class test_th_a: public wrap_thread
 {
@@ -38,8 +39,8 @@ public:
     void my_func() override
     {
         i++;
-        printf("thread id: %zo  i: %zo \n",   id_, i);
-        
+        printf("thread id: %d  i: %d \n", id_, i);
+
         boost::this_thread::sleep_for(boost::chrono::milliseconds(750));
     }
     int i = 0;
@@ -58,8 +59,8 @@ namespace wrapper
         void test_boost();
         void test_sockets();
         std::unique_ptr<cl_fft_base> cl_fft_base_;
-        std::unique_ptr<DuplexNode> sockets_a_; // = std::make_unique<>()
-        std::unique_ptr<DuplexNode> sockets_b_;
+        std::shared_ptr<socket_test> sockets_a_; // = std::make_unique<>()
+        std::shared_ptr<socket_test> sockets_b_;
 
     private:
         void generation_beam(size_t n, size_t m=1);

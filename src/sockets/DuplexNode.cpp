@@ -13,8 +13,11 @@ DuplexNode::DuplexNode(io_context& io_context, unsigned short listen_port, unsig
     socket_(io_context),
     connect_port_(connect_port),
     resolver_(io_context)
-{
-}
+{}
+
+//DuplexNode::DuplexNode(io_context& io_context, unsigned short port)
+//    : acceptor_(io_context, tcp::endpoint(tcp::v4(), port)),
+//    socket_(io_context){}
 
 
 void DuplexNode::start()
@@ -26,6 +29,46 @@ void DuplexNode::start()
 
 }
 
+void DuplexNode::do_accept()
+{
+    boost::system::error_code ec;
+    acceptor_.async_accept(socket_, [self = shared_from_this()](boost::system::error_code ec) 
+    {
+        if (!ec) {
+            std::cout << "Accepted connection from " << self->socket_.remote_endpoint() << std::endl;
+            self->start_read();
+        }
+        else {
+            std::cerr << "Accept error: " << ec.message() << std::endl;
+        }
+        // Продолжаем слушать
+        self->do_accept();
+    });
+    int kk = 1;
+}
+
+void DuplexNode::start_read()
+{
+    auto self = shared_from_this();
+    boost::asio::async_read_until(socket_, boost::asio::dynamic_buffer(read_msg_), '\n',
+        [self](boost::system::error_code ec, std::size_t length) {
+            if (!ec) {
+                std::string msg(self->read_msg_.substr(0, length - 1));
+                self->read_msg_.erase(0, length);
+                std::cout << "Received: " << msg << std::endl;
+
+                // Продолжаем читать
+                self->start_read();
+            }
+            else {
+                std::cerr << "Read error: " << ec.message() << std::endl;
+                self->socket_.close();
+            }
+        });
+}
+
+
+/*
 void DuplexNode::do_accept() {
     acceptor_.async_accept([self = shared_from_this()](boost::system::error_code ec, tcp::socket socket) {
         if (!ec) {
@@ -39,6 +82,7 @@ void DuplexNode::do_accept() {
         self->do_accept();
         });
 }
+*/
 
 void DuplexNode::do_connect() {
     auto endpoints = resolver_.resolve("127.0.0.1", std::to_string(connect_port_));
@@ -47,7 +91,7 @@ void DuplexNode::do_connect() {
             if (!ec) {
                 std::cout << "Connected to peer on port " << self->connect_port_ << std::endl;
 //                self->start_read(self->socket_);
-                self->start_read(std::move(self->socket_));
+                self->start_read();
                 self->start_write();
             }
             else {
@@ -59,29 +103,7 @@ void DuplexNode::do_connect() {
         });
 }
 
-////////////////////////
 /*
-void  DuplexNode::start_read(tcp::socket socket) {
-    auto self = shared_from_this();
-    async_read_until(socket, dynamic_buffer(read_msg_), '\n',
-        [self, &socket](boost::system::error_code ec, std::size_t length) mutable {
-            if (!ec) {
-                std::string msg(self->read_msg_.substr(0, length - 1)); // без '\n'
-                self->read_msg_.erase(0, length);
-                std::cout << "Received: " << msg << std::endl;
-
-                // Продолжаем читать
-                self->start_read(socket);
-            }
-            else {
-                std::cerr << "Read error: " << ec.message() << std::endl;
-                socket.close();
-            }
-        });
-}
-*/
-///////////////////////////////////
-
 void DuplexNode::start_read(tcp::socket socket) {
     auto self = shared_from_this();
     async_read_until(socket, dynamic_buffer(read_msg_), '\n',
@@ -99,7 +121,7 @@ void DuplexNode::start_read(tcp::socket socket) {
             }
         });
 }
-
+*/
 void  DuplexNode::start_write() {
     auto self = shared_from_this();
     std::thread([self]() {
