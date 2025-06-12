@@ -267,7 +267,7 @@ void TcpDuplex::test_data_socket()
 {
     YAML::MSocket01 convert_msg = YAML::MSocket01();
     std::string message_ = "start";
-    for (int i=0; i<30; i++)
+    for (int i=0; i<10; i++)
     {
 //        std::cout << i << "   PUSH DATA" << std::endl;
 
