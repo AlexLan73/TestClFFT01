@@ -4,13 +4,13 @@
 
 TcpDuplex::TcpDuplex(const ip_address_one& ip_address)
     : ip_address_one_(ip_address), token_(queue_send_), socket_(io_context_),
-    resolver_(io_context_)
+      resolver_(io_context_), timer(boost::asio::deadline_timer(socket_.get_executor()))
 //: queue_send_(), token_(queue_send_)  // Инициализация очереди (если нужно)
 {
     //    ip_address_one_ = ip_address;
-//    socket_ = boost::asio::ip::tcp::socket(io_context_); // (io_context);
-//    resolver_ = boost::asio::ip::tcp::resolver(io_context_);
-//    endpoints_ = resolver_.resolve(ip_address_one_.ip_address, std::to_string(ip_address_one_.port2));
+    //    socket_ = boost::asio::ip::tcp::socket(io_context_); // (io_context);
+    //    resolver_ = boost::asio::ip::tcp::resolver(io_context_);
+    //    endpoints_ = resolver_.resolve(ip_address_one_.ip_address, std::to_string(ip_address_one_.port2));
     // Разрешаем адрес один раз при создании объекта
     endpoint_ = *resolver_.resolve(
         ip_address_one_.ip_address,
@@ -19,14 +19,15 @@ TcpDuplex::TcpDuplex(const ip_address_one& ip_address)
 
     // Устанавливаем соединение
     socket_.connect(endpoint_);
-
+//    timer = boost::asio::deadline_timer(socket_.get_executor());
+    timer.expires_from_now(boost::posix_time::seconds(5)); // Таймаут 5 сек
 }
 
 
 TcpDuplex::~TcpDuplex()
 {
-    is_working_read_ = false;
-    is_working_send_ = false;
+//    is_working_read_ = false;
+//    is_working_send_ = false;
     f_read_thread_.join();
     f_send_thread_.join();
 }
@@ -82,9 +83,57 @@ void TcpDuplex::run_send(std::stop_token stoken)
 //            boost::asio::write(socket, boost::asio::buffer(yamlStr));
 
             uint32_t net_length = static_cast<uint32_t>(data_.size());
-            boost::asio::write(socket_, boost::asio::buffer(&net_length, 4));
-            boost::asio::write(socket_, boost::asio::buffer(data_));
+/*
+ // Устанавливаем таймаут на запись
+boost::system::error_code ec;
+boost::asio::async_write(socket_, boost::asio::buffer(data_),
+    [&](const boost::system::error_code& error, size_t bytes_transferred) {
+        timer.cancel();
+        if (error) {
+            std::cerr << "Write error: " << error.message() << "\n";
+            reconnect();
+        }
+    }
+);
 
+timer.async_wait([&](const boost::system::error_code&) {
+    if (timer.expires_from_now().is_negative()) {
+        socket_.cancel();  // Прерываем операцию
+        reconnect();
+    }
+});
+ 
+ */
+
+
+
+            boost::asio::write(socket_, boost::asio::buffer(&net_length, 4));
+            // AI
+            if (!socket_.is_open()) {
+                reconnect();
+                continue;  // Пропустить итерацию, пока соединение не восстановлено
+            }
+//////
+//////            boost::asio::write(socket_, boost::asio::buffer(data_));
+//////
+// Устанавливаем таймаут на запись
+            boost::system::error_code ec;
+            boost::asio::async_write(socket_, boost::asio::buffer(data_),
+                [&](const boost::system::error_code& error, size_t bytes_transferred) {
+                    timer.cancel();
+                    if (error) {
+                        std::cerr << "Write error: " << error.message() << "\n";
+                        reconnect();
+                    }
+                }
+            );
+
+            timer.async_wait([&](const boost::system::error_code&) {
+                if (timer.expires_from_now().is_negative()) {
+                    socket_.cancel();  // Прерываем операцию
+                    reconnect();
+                }
+                });///
             // Прием ответа
             uint32_t response_length;
             boost::asio::read(socket_, boost::asio::buffer(&response_length, 4));
@@ -98,6 +147,9 @@ void TcpDuplex::run_send(std::stop_token stoken)
             response.erase(std::remove_if(response.begin(), response.end(),
                 [](char c) { return (c >= 0x00 && c <= 0x1F) || c == 0x7F; }),
                 response.end());
+
+            std::cout << "   RETURN  SERVER  "<< response << std::endl;
+
         }
         catch (const std::exception& e) {
             std::cerr << "Send error: " << e.what() << "\n";
@@ -168,7 +220,7 @@ void TcpDuplex::run_send(std::stop_token stoken)
 
 /////////////////////////////////////////////////////////////////////////////////////////
         // Работаем, пока не поступил запрос на остановку
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+//        std::this_thread::sleep_for(std::chrono::milliseconds(100));
 //        std::cout << "Working run_send..." << std::endl;
     }
 
@@ -215,9 +267,9 @@ void TcpDuplex::test_data_socket()
 {
     YAML::MSocket01 convert_msg = YAML::MSocket01();
     std::string message_ = "start";
-    for (int i=0; i<50; i++)
+    for (int i=0; i<30; i++)
     {
-        std::cout << i << "   PUSH DATA" << std::endl;
+//        std::cout << i << "   PUSH DATA" << std::endl;
 
         YAML::IMSocket01 im_socket01{ message_, i };
         std::string yamlStr = convert_msg.serializeToYaml(im_socket01);

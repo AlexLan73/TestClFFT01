@@ -119,7 +119,7 @@ private:
     boost::asio::ip::tcp::resolver resolver_;     // Резолвер
     boost::asio::ip::tcp::endpoint endpoint_;     // Кешированный endpoint
 //    boost::asio::ip::tcp::endpoint endpoints_;     // Кешированный endpoint
-
+    boost::asio::deadline_timer timer;
 };
 
 /*
