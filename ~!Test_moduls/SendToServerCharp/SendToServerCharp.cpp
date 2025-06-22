@@ -24,8 +24,342 @@
 #include "src/manual_reset_event.h"
 #include "src/ReadWriteYaml.h"
 #include "src/IpAddressOne.h"
-#include "src/MSocket01.h"
-#include "src/TcpDuplex.h"
+//#include "src/MSocket01.h"
+//#include "src/TcpDuplex.h"
+
+using boost::asio::ip::tcp;
+namespace asio = boost::asio;
+
+
+using boost::asio::ip::tcp;
+namespace asio = boost::asio;
+
+struct MyMessage {
+    std::string Text;
+    int Number;
+};
+
+std::string SerializeToYaml(const MyMessage& msg) {
+    YAML::Emitter out;
+    out << YAML::BeginMap;
+    out << YAML::Key << "text" << YAML::Value << msg.Text;
+    out << YAML::Key << "number" << YAML::Value << msg.Number;
+    out << YAML::EndMap;
+    return out.c_str();
+}
+
+class TcpClient {
+public:
+    TcpClient(asio::io_context& io, const std::string& host, int port)
+        : resolver_(io), socket_(io) {
+        endpoints_ = resolver_.resolve(host, std::to_string(port));
+    }
+
+    void Connect() {
+        asio::connect(socket_, endpoints_);
+
+        // WatsonTcp требует начальный handshake
+        uint32_t handshake = 0;
+        asio::write(socket_, asio::buffer(&handshake, sizeof(handshake)));
+
+        std::cout << "✅ Успешное подключение к серверу" << std::endl;
+    }
+
+    void Send(const MyMessage& msg) {
+        std::string yaml = SerializeToYaml(msg);
+        uint32_t length = htonl(yaml.size());
+
+        std::vector<asio::const_buffer> buffers;
+        buffers.push_back(asio::buffer(&length, sizeof(length)));
+        buffers.push_back(asio::buffer(yaml));
+
+        asio::write(socket_, buffers);
+        std::cout << "📨 Отправлено сообщение: " << yaml << std::endl;
+
+        ReceiveResponse();
+    }
+
+private:
+    void ReceiveResponse() {
+        uint32_t length;
+        asio::read(socket_, asio::buffer(&length, sizeof(length)));
+        length = ntohl(length);
+
+        std::vector<char> buf(length);
+        asio::read(socket_, asio::buffer(buf));
+
+        std::cout << "📩 Ответ сервера: "
+            << std::string(buf.begin(), buf.end()) << std::endl;
+    }
+
+    tcp::resolver resolver_;
+    tcp::socket socket_;
+    tcp::resolver::results_type endpoints_;
+};
+
+int main() {
+    try {
+        asio::io_context io;
+        TcpClient client(io, "127.0.0.1", 20000);
+        client.Connect();
+
+        MyMessage msg;
+        msg.Text = "dddddddddddd";
+        msg.Number = 2123;
+        client.Send(msg);
+    }
+    catch (std::exception& e) {
+        std::cerr << "❌ Ошибка: " << e.what() << std::endl;
+    }
+
+    return 0;
+}
+
+
+/*
+    void SendMessage(const YAML::IMSocket01& msg) {
+        YAML::MSocket01 convert_msg = YAML::MSocket01();
+        std::string yaml = convert_msg.serializeToYaml(msg);
+        uint32_t length = htonl(static_cast<uint32_t>(yaml.size()));
+
+        // Отправляем длину сообщения
+        asio::write(socket_, asio::buffer(&length, sizeof(length)));
+
+        // Отправляем само сообщение
+        asio::write(socket_, asio::buffer(yaml));
+
+        std::cout << "Sent: " << yaml << std::endl;
+    }
+*/
+    /*
+    std::string ReceiveResponse() {
+        // Читаем длину ответа
+        uint32_t length;
+        asio::read(socket_, asio::buffer(&length, sizeof(length)));
+        length = ntohl(length);
+
+        // Читаем данные
+        std::vector<char> buf(length);
+        asio::read(socket_, asio::buffer(buf));
+
+        return std::string(buf.begin(), buf.end());
+    }
+
+
+private:
+    tcp::socket socket_;
+    tcp::endpoint endpoint_;
+    tcp::resolver resolver_;
+    tcp::resolver::results_type endpoints_;
+};
+
+
+
+int main()
+{
+//    stoken = std::stop_token();
+
+//
+//    std::jthread producerThread(producer);
+//    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//    std::jthread consumerThread(consumer);
+//
+//    producerThread.join();
+////    auto _c = queueSend.size_approx();
+////    auto _dd = 1;
+//
+//    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//    stoken.stop_requested();
+//    consumerThread.join();
+    
+
+    try {
+        asio::io_context io;
+        TcpClient client(io, "127.0.0.1", 20000);
+        client.Connect();
+        YAML::MSocket01 convert_msg = YAML::MSocket01();
+        YAML::IMSocket01  msg{ "START CPP", 1000 };
+        std::string yamlStr = convert_msg.serializeToYaml(msg);
+
+//        MyMessage msg;
+
+        client.SendMessage(msg);
+        std::string response = client.ReceiveResponse();
+        std::cout << "Server response: " << response << std::endl;
+
+
+        //while (true) {
+        //    std::cout << "Enter text: ";
+        //    std::getline(std::cin, msg.Text);
+
+        //    std::cout << "Enter number: ";
+        //    std::cin >> msg.Number;
+        //    std::cin.ignore();
+
+        //    client.SendMessage(msg);
+        //    std::string response = client.ReceiveResponse();
+        //    std::cout << "Server response: " << response << std::endl;
+        //}
+    }
+    catch (std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+    }
+
+
+
+    std::cout << "Test SOCKET ! \n";
+    std::string _pathYaml = R"(E:\C#\OpenCLDeskTop\Core\DeskTop\ipAddresses.yaml)";
+    std::map<int, ip_address_one> data_file_yaml;
+    try 
+    {
+        ReadWriteYaml rw(_pathYaml);
+        // Чтение
+        data_file_yaml = rw.ReadYaml();
+//        print_map_ip_address(&data_file_yaml);
+    }
+    catch (const std::exception& ex) {
+        std::cerr << "Exception: " << ex.what() << '\n';
+    }
+
+    ip_address_one _one_ip_address = data_file_yaml[0];
+    std::swap(_one_ip_address.port1, _one_ip_address.port2);
+    data_file_yaml[0] = _one_ip_address;
+
+
+
+
+
+
+
+
+
+    std::cout << "Нажмите Enter для продолжения...";
+    std::cin.get();
+
+    return 0;
+}
+
+/*
+
+#include <iostream>
+#include <string>
+#include <vector>
+#include <boost/asio.hpp>
+#include <yaml-cpp/yaml.h>
+
+using boost::asio::ip::tcp;
+namespace asio = boost::asio;
+
+// Структура сообщения (аналог C# myMessage)
+struct MyMessage {
+    std::string Text;
+    int Number;
+};
+
+// Сериализация MyMessage в YAML
+std::string SerializeToYaml(const MyMessage& msg) {
+    YAML::Emitter out;
+    out << YAML::BeginMap;
+    out << YAML::Key << "text" << YAML::Value << msg.Text;
+    out << YAML::Key << "number" << YAML::Value << msg.Number;
+    out << YAML::EndMap;
+    return out.c_str();
+}
+
+// Десериализация YAML в MyMessage
+MyMessage DeserializeFromYaml(const std::string& yamlStr) {
+    YAML::Node node = YAML::Load(yamlStr);
+    return MyMessage{
+        node["text"].as<std::string>(),
+        node["number"].as<int>()
+    };
+}
+
+class TcpClient {
+public:
+    TcpClient(asio::io_context& io, const std::string& host, int port)
+        : socket_(io), endpoint_(asio::ip::address::from_string(host), port) {}
+
+    void Connect() {
+        socket_.connect(endpoint_);
+        std::cout << "Connected to " << endpoint_.address().to_string()
+                  << ":" << endpoint_.port() << std::endl;
+    }
+
+    void SendMessage(const MyMessage& msg) {
+        std::string yaml = SerializeToYaml(msg);
+        uint32_t length = htonl(static_cast<uint32_t>(yaml.size()));
+
+        // Отправляем длину сообщения
+        asio::write(socket_, asio::buffer(&length, sizeof(length)));
+
+        // Отправляем само сообщение
+        asio::write(socket_, asio::buffer(yaml));
+
+        std::cout << "Sent: " << yaml << std::endl;
+    }
+
+    std::string ReceiveResponse() {
+        // Читаем длину ответа
+        uint32_t length;
+        asio::read(socket_, asio::buffer(&length, sizeof(length)));
+        length = ntohl(length);
+
+        // Читаем данные
+        std::vector<char> buf(length);
+        asio::read(socket_, asio::buffer(buf));
+
+        return std::string(buf.begin(), buf.end());
+    }
+
+private:
+    tcp::socket socket_;
+    tcp::endpoint endpoint_;
+};
+
+int main() {
+    try {
+        asio::io_context io;
+        TcpClient client(io, "127.0.0.1", 20000);
+        client.Connect();
+
+        while (true) {
+            // Создаем сообщение
+            MyMessage msg;
+            std::cout << "Enter text: ";
+            std::getline(std::cin, msg.Text);
+
+            std::cout << "Enter number: ";
+            std::cin >> msg.Number;
+            std::cin.ignore(); // Игнорируем оставшийся \n
+
+            // Отправляем на сервер
+            client.SendMessage(msg);
+
+            // Получаем ответ
+            std::string response = client.ReceiveResponse();
+            std::cout << "Server response: " << response << std::endl;
+        }
+    }
+    catch (std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+    }
+
+    return 0;
+}
+
+
+ */
+
+
+
+
+
+
+
+
+
+/*
 
 
 using namespace moodycamel;
@@ -42,7 +376,7 @@ void print_map_ip_address_one(ip_address_one ip)
 void print_map_ip_address(std::map<int, ip_address_one> *data)
 {
     // Вывод прочитанных данных
-    for (const auto& ip : *data | std::views::values) 
+    for (const auto& ip : *data | std::views::values)
         print_map_ip_address_one(ip);
 }
 
@@ -77,7 +411,7 @@ void consumer()
 {
     moodycamel::ConsumerToken token(queueSend); // Оптимизация для одного потребителя
 
-    while (!stoken.stop_requested()) 
+    while (!stoken.stop_requested())
     {
 
         // В другом потоке:
@@ -98,7 +432,7 @@ void consumer()
         }
         DataTuple data;
 
-        if (queueSend.try_dequeue(token, data)) 
+        if (queueSend.try_dequeue(token, data))
         {
            auto& [vec1, vec2] = data;
            std::cout << "READ  SIZE =  " << queueSend.size_approx() << "  \n";
@@ -122,16 +456,16 @@ void consumer()
 //                std::cout << "!!!  REPEAT = 0   \n";
 
 //        }
-//        else 
+//        else
 //        {
-///*
-//            DataTuple data;
-//            if (queueSend.try_dequeue(data)) {
-//                // data содержит кортеж (buffer1, buffer2)
-//                auto& [buffer1, buffer2] = data;
-//                // Обработка данных...
-//            }
-//*/
+////
+////            DataTuple data;
+////            if (queueSend.try_dequeue(data)) {
+////                // data содержит кортеж (buffer1, buffer2)
+////                auto& [buffer1, buffer2] = data;
+////                // Обработка данных...
+////            }
+////
 //        }
 
 
@@ -159,46 +493,6 @@ void consumer()
 
 
 
-int main()
-{
-//    stoken = std::stop_token();
-
-
-/*
-    std::jthread producerThread(producer);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    std::jthread consumerThread(consumer);
-
-    producerThread.join();
-//    auto _c = queueSend.size_approx();
-//    auto _dd = 1;
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    stoken.stop_requested();
-    consumerThread.join();
-    */
-
-
-
-
-
-    std::cout << "Test SOCKET ! \n";
-    std::string _pathYaml = R"(E:\C#\OpenCLDeskTop\Core\DeskTop\ipAddresses.yaml)";
-    std::map<int, ip_address_one> data_file_yaml;
-    try 
-    {
-        ReadWriteYaml rw(_pathYaml);
-        // Чтение
-        data_file_yaml = rw.ReadYaml();
-//        print_map_ip_address(&data_file_yaml);
-    }
-    catch (const std::exception& ex) {
-        std::cerr << "Exception: " << ex.what() << '\n';
-    }
-
-    ip_address_one _one_ip_address = data_file_yaml[0];
-    std::swap(_one_ip_address.port1, _one_ip_address.port2);
-    data_file_yaml[0] = _one_ip_address;
 
     std::shared_ptr<TcpDuplex> tcp_duplex = std::make_shared<TcpDuplex>(data_file_yaml[0]);
     tcp_duplex->start_thread();
@@ -247,7 +541,7 @@ int main()
             boost::asio::read(socket, boost::asio::buffer(buf.data(), responseLength));
 
              std::string yamlReceived(buf.begin(), buf.end());
-             yamlReceived.erase( std::ranges::remove_if(yamlReceived, [](char c) 
+             yamlReceived.erase( std::ranges::remove_if(yamlReceived, [](char c)
                  {  return (c >= 0x00 && c <= 0x1F) || c == 0x7F; }).begin(), yamlReceived.end());
 
             if(yamlReceived=="ok")
@@ -255,9 +549,9 @@ int main()
                 std::cout << " From Server: " << yamlReceived << std::endl;
             }else
             {
-                
+
             }
-            
+
         }
     }
     catch (std::exception& e)
@@ -266,6 +560,7 @@ int main()
     }
 
 
-    return 0;
-}
 
+
+ 
+ */
