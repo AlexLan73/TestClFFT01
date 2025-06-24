@@ -24,6 +24,12 @@
     <ClCompile Include="src\memory_base.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\memory_nome.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cuda_memory.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\TestYaml.h">
@@ -33,6 +39,12 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="src\CudaTemperature.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\memory_nome.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cuda_memory.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

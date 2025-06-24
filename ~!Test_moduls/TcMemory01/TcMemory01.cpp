@@ -2,158 +2,231 @@
 //
 
 // main.cpp
-#include "src/memory_base.h"
-#include "src/CudaTemperature.h"
 #include <iostream>
-#include <vector>
-#include <map>
-#include <numeric>   // Для std::accumulate (расчет контрольной суммы)
-#include <chrono>    // Для получения текущего времени
-#include <format>    // Для форматирования времени (требует C++20)
-#include "src/cuda_node.h"
 #include <thread>
+#include <chrono>
+#include <iomanip> // для std::fixed, std::setprecision
 
-#include "src/memory_base.h"
+#include "src/cuda_memory.h"
+#include "src/memory_nome.h"
 
-// --- Вспомогательная функция для получения времени в формате HH:mm:ss.fff ---
+// Вспомогательная функция для получения времени (оставьте её как есть)
 std::string get_current_time_str() {
-  const auto now = std::chrono::system_clock::now();
-  // В C++20 и выше можно использовать std::format
-  return std::format("{:%T}", now);
+  auto now = std::chrono::system_clock::now();
+  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+  auto timer = std::chrono::system_clock::to_time_t(now);
+  std::tm bt{};
+  localtime_s(&bt, &timer);
+
+  std::stringstream ss;
+  ss << std::put_time(&bt, "%T") << '.' << std::setfill('0') << std::setw(3) << ms.count();
+  return ss.str();
 }
 
-//RecDataMetaData{
-//  std::vector<char> Bytes;
-//  MetadataMap MetaData;
-//};
+int main() {
+  std::cout << "--- C++ КЛИЕНТ ЗАПУЩЕН ---" << std::endl;
 
-// --- Логика ЧИТАТЕЛЯ ---
-// Эта функция будет вызвана, когда придут новые данные
-//void handle_data_received(const std::vector<char>& data, const std::map<std::string, std::string>& metadata) {
-void handle_data_received(const RecDataMetaData& dm) {
-    std::cout << "\n--- [ЧИТАТЕЛЬ] Получены новые данные! ---\n";
-    auto metadata = dm.MetaData;
-    auto data = dm.Bytes;
-  // --- НАДЕЖНАЯ ПРОВЕРКА МЕТАДАННЫХ ---
-  auto type_it = metadata.find("type");
-  if (type_it == metadata.end() || type_it->second != "cudatemperature[]") {
-    std::cerr << "[ЧИТАТЕЛЬ] Ошибка: тип не указан или не соответствует 'cudatemperature[]'\n";
-    return;
-  }
-
-  auto size_it = metadata.find("size");
-  if (size_it == metadata.end()) {
-    std::cerr << "[ЧИТАТЕЛЬ] Ошибка: в метаданных отсутствует ключ 'size'\n";
-    return;
-  }
-
-  size_t expected_size;
-  try {
-    expected_size = std::stoul(size_it->second);
-  }
-  catch (const std::exception& e) {
-    std::cerr << "[ЧИТАТЕЛЬ] Ошибка конвертации размера: " << e.what() << "\n";
-    return;
-  }
-
-  if (data.size() < expected_size) {
-    std::cerr << "[ЧИТАТЕЛЬ] Ошибка: фактический размер данных (" << data.size()
-      << ") меньше ожидаемого (" << expected_size << ")\n";
-    return;
-  }
-
-  // --- НАДЕЖНАЯ ПРОВЕРКА КОНТРОЛЬНОЙ СУММЫ ---
-  auto sum_it = metadata.find("control_sum");
-  if (sum_it != metadata.end()) {
-    long received_sum = std::accumulate(data.begin(), data.begin() + expected_size, 0L);
-    if (std::to_string(received_sum) == sum_it->second) {
-      std::cout << "Контрольная сумма совпадает!\n";
+  // --- 1. Определяем Callback для обработки ОТВЕТА от сервера ---
+  // Эта функция будет вызвана, когда C# сервер пришлет обработанные данные.
+  auto on_response_received = [](const std::vector<CudaTemperature>& data) {
+    std::cout << "\n\n[C++ КЛИЕНТ] >>>>> ПОЛУЧЕН ОТВЕТ ОТ СЕРВЕРА <<<<<\n";
+    std::cout << "[C++ КЛИЕНТ] Данные после обработки (умножения на 10):\n";
+    for (const auto& temp : data) {
+      // Выводим с форматированием для наглядности
+      std::cout << "  -> Время: " << temp.Dt
+        << ", Новая Температура: " << std::fixed << std::setprecision(1) << temp.Temp << " C\n";
     }
-    else {
-      std::cout << "ВНИМАНИЕ: Контрольная сумма не совпадает!\n";
-    }
-  }
+    std::cout << "\n[C++ КЛИЕНТ] Тест успешно пройден!\n";
+    };
 
-  // --- НАДЕЖНАЯ ДЕСЕРИАЛИЗАЦИЯ ---
-  try {
-    msgpack::object_handle oh = msgpack::unpack(data.data(), expected_size);
-    msgpack::object deserialized = oh.get();
+  // --- 2. Создаем экземпляр клиента ---
+  // Он будет слушать ответ от сервера в фоновом потоке.
+  CudaMemory client_handler("Cuda", ServerClient::Client, on_response_received);
 
-    std::vector<CudaTemperature> temperatures = deserialized.as<std::vector<CudaTemperature>>();
+  // Небольшая пауза, чтобы система успела инициализировать все обработчики
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-    std::cout << "\nУспешно десериализовано " << temperatures.size() << " записей:\n";
-    for (const auto& temp : temperatures) {
-      std::cout << "  Время: " << temp.time << ", Температура: " << temp.temperature << " C\n";
-    }
-  }
-  catch (const std::exception& e) {
-    std::cerr << "[ЧИТАТЕЛЬ] КРИТИЧЕСКАЯ ОШИБКА ДЕСЕРИАЛИЗАЦИИ: " << e.what() << std::endl;
-  }
-  std::cout << "--- [ЧИТАТЕЛЬ] Обработка завершена ---\n";
-}
-
-
-
-void SendTestData(MemoryBase& writer) {
-  std::cout << "\n--- Отправка тестовых данных... ---\n";
-
-  // 1. Создаем данные
-  std::vector<CudaTemperature> ls = {
-      {get_current_time_str(), 43.0f},
-      {get_current_time_str(), 41.0f},
-      {get_current_time_str(), 42.0f},
-      {get_current_time_str(), 44.0f},
-      {get_current_time_str(), 33.0f}
+  // --- 3. Создаем и отправляем исходные данные ---
+  std::cout << "\n[C++ КЛИЕНТ] Создаю и отправляю исходные данные на C# сервер...\n";
+  std::vector<CudaTemperature> initial_data = {
+      {get_current_time_str(), 15.5f},
+      {get_current_time_str(), 20.0f},
+      {get_current_time_str(), 31.2f}
   };
 
-  // 2. Сериализуем данные в байты (MessagePack)
-  std::stringstream buffer;
-  msgpack::pack(buffer, ls);
-  const std::string& packed_str = buffer.str();
-  std::vector<char> bytesTemp(packed_str.begin(), packed_str.end());
-
-  // 3. Формируем метаданные
-  const std::string nameTypeRecord = "cudatemperature[]"; // Согласованное имя типа
-  //long sumByte = std::accumulate(bytesTemp.begin(), bytesTemp.end(), 0L);
-
-  // Мы используем лямбда-функцию, чтобы каждый char трактовался как unsigned char
-  long sumByte = std::accumulate(bytesTemp.begin(), bytesTemp.end(), 0L,
-    [](long sum, char val) {
-      return sum + static_cast<unsigned char>(val);
-    });
-
-  MetadataMap metadata;
-  metadata["type"] = nameTypeRecord;
-  metadata["size"] = std::to_string(bytesTemp.size());
-  metadata["control_sum"] = std::to_string(sumByte);
-
-  // 4. ОДНА КОМАНДА ДЛЯ ЗАПИСИ ДАННЫХ И МЕТАДАННЫХ
-  try {
-    writer.WriteData(bytesTemp, metadata);
-    std::cout << "Данные и метаданные успешно записаны.\n";
+  // Печатаем то, что отправляем
+  for (const auto& temp : initial_data) {
+    std::cout << "  -> Отправка: Время=" << temp.Dt << ", Температура=" << temp.Temp << " C\n";
   }
-  catch (const std::exception& e) {
-    std::cerr << "Ошибка записи: " << e.what() << std::endl;
-  }
-}
 
+  client_handler.SendData(initial_data);
+  std::cout << "[C++ КЛИЕНТ] Данные отправлены. Ожидание ответа от сервера...\n";
 
-
-int main(int argc, char* argv[]) {
-  const int size_buff_ = 64 * 1024;
-  const std::string memoryName = "CudaWrite";
-  MemoryBase writer(memoryName, TypeBlockMemory::Write, size_buff_, handle_data_received);
-  SendTestData(writer);
-  std::this_thread::sleep_for(std::chrono::seconds(2));
-//  writer.ClearCommandControl(); // Демонстрация очистки
-  std::cout << "\nОбмен данными завершен. Нажмите Enter для выхода...\n";
+  // --- 4. Держим программу активной, чтобы успеть получить ответ ---
+  std::cout << "\nНажмите Enter для завершения работы клиента.\n";
   std::cin.get();
 
-
-    return 0;
+  return 0;
 }
 
 
+
+//-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-////////////////////////////////////////////////////////////////////
+//// main.cpp
+//#include "src/memory_base.h"
+//#include "src/CudaTemperature.h"
+//#include <iostream>
+//#include <vector>
+//#include <map>
+//#include <numeric>   // Для std::accumulate (расчет контрольной суммы)
+//#include <chrono>    // Для получения текущего времени
+//#include <format>    // Для форматирования времени (требует C++20)
+////#include "src/cuda_node.h"
+//#include <thread>
+//
+//#include "src/memory_base.h"
+//
+//// --- Вспомогательная функция для получения времени в формате HH:mm:ss.fff ---
+//std::string get_current_time_str() {
+//  const auto now = std::chrono::system_clock::now();
+//  // В C++20 и выше можно использовать std::format
+//  return std::format("{:%T}", now);
+//}
+//
+////RecDataMetaData{
+////  std::vector<char> Bytes;
+////  MetadataMap MetaData;
+////};
+//
+//// --- Логика ЧИТАТЕЛЯ ---
+//// Эта функция будет вызвана, когда придут новые данные
+////void handle_data_received(const std::vector<char>& data, const std::map<std::string, std::string>& metadata) {
+//void handle_data_received(const RecDataMetaData& dm) {
+//  std::cout << "\n--- [ЧИТАТЕЛЬ] Получены новые данные! ---\n";
+//  auto metadata = dm.MetaData;
+//  auto data = dm.Bytes;
+//  // --- НАДЕЖНАЯ ПРОВЕРКА МЕТАДАННЫХ ---
+//  auto type_it = metadata.find("type");
+//  if (type_it == metadata.end() || type_it->second != "cudatemperature[]") {
+//    std::cerr << "[ЧИТАТЕЛЬ] Ошибка: тип не указан или не соответствует 'cudatemperature[]'\n";
+//    return;
+//  }
+//
+//  auto size_it = metadata.find("size");
+//  if (size_it == metadata.end()) {
+//    std::cerr << "[ЧИТАТЕЛЬ] Ошибка: в метаданных отсутствует ключ 'size'\n";
+//    return;
+//  }
+//
+//  size_t expected_size;
+//  try {
+//    expected_size = std::stoul(size_it->second);
+//  }
+//  catch (const std::exception& e) {
+//    std::cerr << "[ЧИТАТЕЛЬ] Ошибка конвертации размера: " << e.what() << "\n";
+//    return;
+//  }
+//
+//  if (data.size() < expected_size) {
+//    std::cerr << "[ЧИТАТЕЛЬ] Ошибка: фактический размер данных (" << data.size()
+//      << ") меньше ожидаемого (" << expected_size << ")\n";
+//    return;
+//  }
+//
+//  // --- НАДЕЖНАЯ ПРОВЕРКА КОНТРОЛЬНОЙ СУММЫ ---
+//  auto sum_it = metadata.find("control_sum");
+//  if (sum_it != metadata.end()) {
+//    long received_sum = std::accumulate(data.begin(), data.begin() + expected_size, 0L);
+//    if (std::to_string(received_sum) == sum_it->second) {
+//      std::cout << "Контрольная сумма совпадает!\n";
+//    }
+//    else {
+//      std::cout << "ВНИМАНИЕ: Контрольная сумма не совпадает!\n";
+//    }
+//  }
+//
+//  // --- НАДЕЖНАЯ ДЕСЕРИАЛИЗАЦИЯ ---
+//  try {
+//    msgpack::object_handle oh = msgpack::unpack(data.data(), expected_size);
+//    msgpack::object deserialized = oh.get();
+//
+//    std::vector<CudaTemperature> temperatures = deserialized.as<std::vector<CudaTemperature>>();
+//
+//    std::cout << "\nУспешно десериализовано " << temperatures.size() << " записей:\n";
+//    for (const auto& temp : temperatures) {
+//      std::cout << "  Время: " << temp.time << ", Температура: " << temp.temperature << " C\n";
+//    }
+//  }
+//  catch (const std::exception& e) {
+//    std::cerr << "[ЧИТАТЕЛЬ] КРИТИЧЕСКАЯ ОШИБКА ДЕСЕРИАЛИЗАЦИИ: " << e.what() << std::endl;
+//  }
+//  std::cout << "--- [ЧИТАТЕЛЬ] Обработка завершена ---\n";
+//}
+//
+//
+//
+//void SendTestData(MemoryBase& writer) {
+//  std::cout << "\n--- Отправка тестовых данных... ---\n";
+//
+//  // 1. Создаем данные
+//  std::vector<CudaTemperature> ls = {
+//      {get_current_time_str(), 43.0f},
+//      {get_current_time_str(), 41.0f},
+//      {get_current_time_str(), 42.0f},
+//      {get_current_time_str(), 44.0f},
+//      {get_current_time_str(), 33.0f}
+//  };
+//
+//  // 2. Сериализуем данные в байты (MessagePack)
+//  std::stringstream buffer;
+//  msgpack::pack(buffer, ls);
+//  const std::string& packed_str = buffer.str();
+//  std::vector<uint8_t> bytesTemp(packed_str.begin(), packed_str.end());
+//
+//  // 3. Формируем метаданные
+//  const std::string nameTypeRecord = "cudatemperature[]"; // Согласованное имя типа
+//  //long sumByte = std::accumulate(bytesTemp.begin(), bytesTemp.end(), 0L);
+//
+//  // Мы используем лямбда-функцию, чтобы каждый char трактовался как unsigned char
+//  long sumByte = std::accumulate(bytesTemp.begin(), bytesTemp.end(), 0L,
+//    [](long sum, char val) {
+//      return sum + static_cast<unsigned char>(val);
+//    });
+//
+//  MetadataMap metadata;
+//  metadata["type"] = nameTypeRecord;
+//  metadata["size"] = std::to_string(bytesTemp.size());
+//  metadata["control_sum"] = std::to_string(sumByte);
+//
+//  // 4. ОДНА КОМАНДА ДЛЯ ЗАПИСИ ДАННЫХ И МЕТАДАННЫХ
+//  try {
+//    writer.WriteData(bytesTemp, metadata);
+//    std::cout << "Данные и метаданные успешно записаны.\n";
+//  }
+//  catch (const std::exception& e) {
+//    std::cerr << "Ошибка записи: " << e.what() << std::endl;
+//  }
+//}
+//
+//
+//
+//int main(int argc, char* argv[]) {
+//  const int size_buff_ = 64 * 1024;
+//  const std::string memoryName = "CudaWrite";
+//  MemoryBase writer(memoryName, TypeBlockMemory::Write, size_buff_, handle_data_received);
+//  SendTestData(writer);
+//  std::this_thread::sleep_for(std::chrono::seconds(2));
+//  //  writer.ClearCommandControl(); // Демонстрация очистки
+//  std::cout << "\nОбмен данными завершен. Нажмите Enter для выхода...\n";
+//  std::cin.get();
+//
+//
+//  return 0;
+//}
+
+
+
+//-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-/-////////////////////////////////////////////////////////////////////
 ////if (argc < 2) {
 ////  std::cerr << "Использование: " << argv[0] << " <reader|writer>" << std::endl;
 ////  return 1;

@@ -64,7 +64,7 @@ MemoryBase::~MemoryBase() {
 }
 
 // --- ПУБЛИЧНЫЕ МЕТОДЫ ---
-void MemoryBase::WriteData(const std::vector<char>& data, const MetadataMap& metadata) {
+void MemoryBase::WriteData(const std::vector<uint8_t>& data, const MetadataMap& metadata) {
   if (data.size() > _dataSegmentSize) {
     throw std::runtime_error("Размер данных превышает размер выделенного сегмента памяти.");
   }
@@ -73,7 +73,7 @@ void MemoryBase::WriteData(const std::vector<char>& data, const MetadataMap& met
   if (pDataBuf == nullptr) {
     throw std::runtime_error("Не удалось получить View Of File для записи данных.");
   }
-
+  // API функции, такие как CopyMemory, ожидают void*, поэтому data.data() будет работать без изменений
   ZeroMemory(pDataBuf, _dataSegmentSize);
   CopyMemory(pDataBuf, data.data(), data.size());
   UnmapViewOfFile(pDataBuf);
