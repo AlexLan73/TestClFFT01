@@ -22,12 +22,18 @@ std::string get_current_time_str() {
   return std::format("{:%T}", now);
 }
 
+//RecDataMetaData{
+//  std::vector<char> Bytes;
+//  MetadataMap MetaData;
+//};
 
 // --- Логика ЧИТАТЕЛЯ ---
 // Эта функция будет вызвана, когда придут новые данные
-void handle_data_received(const std::vector<char>& data, const std::map<std::string, std::string>& metadata) {
-  std::cout << "\n--- [ЧИТАТЕЛЬ] Получены новые данные! ---\n";
-
+//void handle_data_received(const std::vector<char>& data, const std::map<std::string, std::string>& metadata) {
+void handle_data_received(const RecDataMetaData& dm) {
+    std::cout << "\n--- [ЧИТАТЕЛЬ] Получены новые данные! ---\n";
+    auto metadata = dm.MetaData;
+    auto data = dm.Bytes;
   // --- НАДЕЖНАЯ ПРОВЕРКА МЕТАДАННЫХ ---
   auto type_it = metadata.find("type");
   if (type_it == metadata.end() || type_it->second != "cudatemperature[]") {
@@ -86,124 +92,188 @@ void handle_data_received(const std::vector<char>& data, const std::map<std::str
   std::cout << "--- [ЧИТАТЕЛЬ] Обработка завершена ---\n";
 }
 
-void cleanup_ipc_objects(const std::string& baseName) {
-  std::cout << "Очистка IPC объектов для '" << baseName << "'..." << std::endl;
-  boost::interprocess::named_mutex::remove((baseName + "Mutex").c_str());
-  boost::interprocess::named_condition::remove((baseName + "Condition").c_str());
-  boost::interprocess::shared_memory_object::remove((baseName + "Control").c_str());
-  boost::interprocess::shared_memory_object::remove(baseName.c_str());
-  std::cout << "Очистка завершена." << std::endl;
-}
 
-// Функция очистки из предыдущих шагов
-void cleanup_ipc_objects111(const std::string& baseName) {
-  MemoryBase::Destroy(baseName + "Read");
-  MemoryBase::Destroy(baseName + "Write");
-}
 
+void SendTestData(MemoryBase& writer) {
+  std::cout << "\n--- Отправка тестовых данных... ---\n";
+
+  // 1. Создаем данные
+  std::vector<CudaTemperature> ls = {
+      {get_current_time_str(), 43.0f},
+      {get_current_time_str(), 41.0f},
+      {get_current_time_str(), 42.0f},
+      {get_current_time_str(), 44.0f},
+      {get_current_time_str(), 33.0f}
+  };
+
+  // 2. Сериализуем данные в байты (MessagePack)
+  std::stringstream buffer;
+  msgpack::pack(buffer, ls);
+  const std::string& packed_str = buffer.str();
+  std::vector<char> bytesTemp(packed_str.begin(), packed_str.end());
+
+  // 3. Формируем метаданные
+  const std::string nameTypeRecord = "cudatemperature[]"; // Согласованное имя типа
+  //long sumByte = std::accumulate(bytesTemp.begin(), bytesTemp.end(), 0L);
+
+  // Мы используем лямбда-функцию, чтобы каждый char трактовался как unsigned char
+  long sumByte = std::accumulate(bytesTemp.begin(), bytesTemp.end(), 0L,
+    [](long sum, char val) {
+      return sum + static_cast<unsigned char>(val);
+    });
+
+  MetadataMap metadata;
+  metadata["type"] = nameTypeRecord;
+  metadata["size"] = std::to_string(bytesTemp.size());
+  metadata["control_sum"] = std::to_string(sumByte);
+
+  // 4. ОДНА КОМАНДА ДЛЯ ЗАПИСИ ДАННЫХ И МЕТАДАННЫХ
+  try {
+    writer.WriteData(bytesTemp, metadata);
+    std::cout << "Данные и метаданные успешно записаны.\n";
+  }
+  catch (const std::exception& e) {
+    std::cerr << "Ошибка записи: " << e.what() << std::endl;
+  }
+}
 
 
 
 int main(int argc, char* argv[]) {
+  const int size_buff_ = 64 * 1024;
+  const std::string memoryName = "CudaWrite";
+  MemoryBase writer(memoryName, TypeBlockMemory::Write, size_buff_, handle_data_received);
+  SendTestData(writer);
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+//  writer.ClearCommandControl(); // Демонстрация очистки
+  std::cout << "\nОбмен данными завершен. Нажмите Enter для выхода...\n";
+  std::cin.get();
 
 
-  //if (argc < 2) {
-  //  std::cerr << "Использование: " << argv[0] << " <reader|writer>" << std::endl;
-  //  return 1;
-  //}
-
-  const std::string memoryName = "CUDAtest01";
-  cleanup_ipc_objects(memoryName);
-
-//  std::string mode = argv[1];
-
-//  if (mode == "writer") {
-    // --- Логика ПИСАТЕЛЯ ---
-    std::cout << "--- РЕЖИМ ПИСАТЕЛЯ ---\n";
-    MemoryBase writer(memoryName, TypeBlockMemory::Write, 64 * 1024); // 1МБ для данных
-
-    // --- Логика ЧИТАТЕЛЯ ---
-    std::cout << "--- РЕЖИМ ЧИТАТЕЛЯ ---\n";
-    MemoryBase reader(memoryName, TypeBlockMemory::Read, 64 * 1024, handle_data_received);
-
-    std::cout << "Читатель запущен. Ожидание данных...\n";
-
-
-    // 1. Создаем данные, как в C#
-    std::vector<CudaTemperature> ls = {
-        {get_current_time_str(), 43.0f},
-        {get_current_time_str(), 41.0f},
-        {get_current_time_str(), 42.0f},
-        {get_current_time_str(), 44.0f},
-        {get_current_time_str(), 33.0f}
-    };
-
-    std::string _x_name1 = typeid(ls).name();
-    //auto xxx = typeid(ls).;
-
-    // 2. Сериализуем данные в байты
-    std::stringstream buffer;
-    msgpack::pack(buffer, ls);
-    const std::string& packed_str = buffer.str();
-    std::vector<char> bytesTemp(packed_str.begin(), packed_str.end());
-
-    std::cout << "Данные сериализованы в " << bytesTemp.size() << " байт.\n";
-
-    // 3. Формируем метаданные
-    // В C++ нет простого способа получить имя типа `CudaTemperature[]`
-    // поэтому мы используем согласованную строку.
-    const std::string nameTypeRecord = "cudatemperature[]";
-    long sumByte = std::accumulate(bytesTemp.begin(), bytesTemp.end(), 0L);
-
-    std::map<std::string, std::string> metadata;
-    metadata["type"] = nameTypeRecord;
-    metadata["size"] = std::to_string(bytesTemp.size());
-    metadata["control_sum"] = std::to_string(sumByte);
-
-    std::cout << "Метаданные сформированы.\n";
-
-    // 4. ПИШЕМ В ПАМЯТЬ ДАННЫЕ И СЛУЖЕБНУЮ ИНФОРМАЦИЮ (атомарно)
-    writer.WriteData(bytesTemp, metadata);
-
-    std::cout << "Данные и метаданные успешно записаны в разделяемую память.\n";
-    std::cout << "Писатель завершает работу.\n";
-
-  std::cout << "(Нажмите Enter для выхода)\n";
-    std::cin.get();
-    std::cout << "Читатель завершает работу.\n";
-
-    writer.destroy();
-    reader.destroy();
-
-
-    const std::string memoryNameNew = "CUDA_001";
-
-    // Полная очистка перед стартом для надежности
-    cleanup_ipc_objects111(memoryNameNew);
-
-    std::cout << "--- Создание Сервера и Клиента ---\n";
-    CudaNode server(memoryNameNew, Role::Server);
-    CudaNode client(memoryNameNew, Role::Client);
-    std::cout << "--- Объекты созданы, каналы настроены ---\n";
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Дадим потокам запуститься
-
-    // Клиент отправляет данные Серверу
-    client.testDataMemory();
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Пауза для наглядности
-
-    // Сервер отправляет данные Клиенту
-    server.testDataMemory();
-
-    std::cout << "\nОбмен данными завершен. Нажмите Enter для выхода...\n";
-    std::cin.get();
-
-  return 0;
+    return 0;
 }
 
 
+////if (argc < 2) {
+////  std::cerr << "Использование: " << argv[0] << " <reader|writer>" << std::endl;
+////  return 1;
+////}
+//
+//const std::string memoryName = "CudaWrite";
+////  cleanup_ipc_objects(memoryName);
+//
+////  std::string mode = argv[1];
+//
+////  if (mode == "writer") {
+//    // --- Логика ПИСАТЕЛЯ ---
+//std::cout << "--- РЕЖИМ ПИСАТЕЛЯ ---\n";
+//MemoryBase writer(memoryName, TypeBlockMemory::Write, handle_data_received); // 1МБ для данных
+//
+////// --- Логика ЧИТАТЕЛЯ ---
+////std::cout << "--- РЕЖИМ ЧИТАТЕЛЯ ---\n";
+////MemoryBase reader(memoryName, TypeBlockMemory::Read, 64 * 1024, handle_data_received);
+//
+////std::cout << "Читатель запущен. Ожидание данных...\n";
+//
+//
+//// 1. Создаем данные, как в C#
+//std::vector<CudaTemperature> ls = {
+//    {get_current_time_str(), 43.0f},
+//    {get_current_time_str(), 41.0f},
+//    {get_current_time_str(), 42.0f},
+//    {get_current_time_str(), 44.0f},
+//    {get_current_time_str(), 33.0f}
+//};
+//
+//std::string _x_name1 = typeid(ls).name();
+////auto xxx = typeid(ls).;
+//
+//// 2. Сериализуем данные в байты
+//std::stringstream buffer;
+//msgpack::pack(buffer, ls);
+//const std::string& packed_str = buffer.str();
+//std::vector<char> bytesTemp(packed_str.begin(), packed_str.end());
+//
+//std::cout << "Данные сериализованы в " << bytesTemp.size() << " байт.\n";
+//
+//// 3. Формируем метаданные
+//// В C++ нет простого способа получить имя типа `CudaTemperature[]`
+//// поэтому мы используем согласованную строку.
+//const std::string nameTypeRecord = "cudatemperature[]";
+//long sumByte = std::accumulate(bytesTemp.begin(), bytesTemp.end(), 0L);
+//
+//std::map<std::string, std::string> metadata;
+//metadata["type"] = nameTypeRecord;
+//metadata["size"] = std::to_string(bytesTemp.size());
+//metadata["control_sum"] = std::to_string(sumByte);
+//
+//std::cout << "Метаданные сформированы.\n";
+//
+//writer.SetCommandControl(metadata);
+//std::cout << "\nОбмен данными завершен. Нажмите Enter для выхода...\n";
+//std::cin.get();
 
+
+
+
+
+//    // 4. ПИШЕМ В ПАМЯТЬ ДАННЫЕ И СЛУЖЕБНУЮ ИНФОРМАЦИЮ (атомарно)
+//    writer.WriteData(bytesTemp, metadata);
+//
+//    std::cout << "Данные и метаданные успешно записаны в разделяемую память.\n";
+//    std::cout << "Писатель завершает работу.\n";
+//
+//  std::cout << "(Нажмите Enter для выхода)\n";
+//    std::cin.get();
+//    std::cout << "Читатель завершает работу.\n";
+//
+//    writer.destroy();
+////    reader.destroy();
+//
+//
+//    const std::string memoryNameNew = "CUDA_001";
+//
+//    // Полная очистка перед стартом для надежности
+//    cleanup_ipc_objects111(memoryNameNew);
+//
+//    std::cout << "--- Создание Сервера и Клиента ---\n";
+//    CudaNode server(memoryNameNew, Role::Server);
+//    CudaNode client(memoryNameNew, Role::Client);
+//    std::cout << "--- Объекты созданы, каналы настроены ---\n";
+//
+//    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Дадим потокам запуститься
+//
+//    // Клиент отправляет данные Серверу
+//    client.testDataMemory();
+//
+//    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Пауза для наглядности
+//
+//    // Сервер отправляет данные Клиенту
+//    server.testDataMemory();
+
+//    std::cout << "\nОбмен данными завершен. Нажмите Enter для выхода...\n";
+//    std::cin.get();
+//
+//  return 0;
+//}
+
+
+
+//void cleanup_ipc_objects(const std::string& baseName) {
+//  std::cout << "Очистка IPC объектов для '" << baseName << "'..." << std::endl;
+//  boost::interprocess::named_mutex::remove((baseName + "Mutex").c_str());
+//  boost::interprocess::named_condition::remove((baseName + "Condition").c_str());
+//  boost::interprocess::shared_memory_object::remove((baseName + "Control").c_str());
+//  boost::interprocess::shared_memory_object::remove(baseName.c_str());
+//  std::cout << "Очистка завершена." << std::endl;
+//}
+//
+//// Функция очистки из предыдущих шагов
+//void cleanup_ipc_objects111(const std::string& baseName) {
+//  MemoryBase::Destroy(baseName + "Read");
+//  MemoryBase::Destroy(baseName + "Write");
+//}
+//
 
 
 //#include <iostream>

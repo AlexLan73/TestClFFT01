@@ -141,16 +141,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\cuda_node.cpp" />
-    <ClCompile Include="src\duplex_memory.cpp" />
     <ClCompile Include="src\memory_base.cpp" />
     <ClCompile Include="TcMemory01.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="MemoryBaseXXX.h" />
     <ClInclude Include="src\CudaTemperature.h" />
-    <ClInclude Include="src\cuda_node.h" />
-    <ClInclude Include="src\duplex_memory.h" />
     <ClInclude Include="src\memory_base.h" />
     <ClInclude Include="src\TestYaml.h" />
   </ItemGroup>

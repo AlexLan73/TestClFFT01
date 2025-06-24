@@ -1,4 +1,356 @@
 ﻿// memory_base.cpp
+
+
+#include "memory_base.h"
+
+#include <sstream>
+#include <stdexcept>
+
+// Вспомогательная функция для конвертации std::string (UTF-8) в std::wstring (UTF-16) для WinAPI
+std::wstring to_wstring(const std::string& str) {
+  if (str.empty()) return std::wstring();
+  int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+  std::wstring wstr(size_needed, 0);
+  MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstr[0], size_needed);
+  return wstr;
+}
+
+// --- КОНСТРУКТОР ---
+MemoryBase::MemoryBase(const std::string& nameMemory, TypeBlockMemory typeBlockMemory, size_t dataSegmentSize,
+  std::function<void(RecDataMetaData)> callBack)
+  : _nameMemoryData(nameMemory),
+  _nameMemoryDataControl(nameMemory + "Control"),
+  _dataSegmentSize(dataSegmentSize),
+  _callBack(callBack) {
+
+  std::wstring wNameControl = to_wstring(_nameMemoryDataControl);
+  std::wstring wNameData = to_wstring(_nameMemoryData);
+  std::wstring eventName = L"Global\\Event" + to_wstring(nameMemory);
+
+  hControlMapFile = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, CONTROL_SIZE, wNameControl.c_str());
+  if (hControlMapFile == NULL) throw std::runtime_error("Failed to create control file mapping.");
+
+  hDataMapFile = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, dataSegmentSize, wNameData.c_str());
+  if (hDataMapFile == NULL) {
+    CloseHandle(hControlMapFile);
+    throw std::runtime_error("Failed to create data file mapping.");
+  }
+
+  hEvent = CreateEventW(NULL, FALSE, FALSE, eventName.c_str());
+  if (hEvent == NULL) {
+    CloseHandle(hControlMapFile);
+    CloseHandle(hDataMapFile);
+    throw std::runtime_error("Failed to create event.");
+  }
+
+  if (typeBlockMemory == TypeBlockMemory::Read && _callBack) {
+    _running = true;
+    _eventThread = std::thread(&MemoryBase::event_loop, this);
+  }
+}
+
+// --- ДЕСТРУКТОР ---
+MemoryBase::~MemoryBase() {
+  if (_running.load()) {
+    _running = false;
+    SetEvent(hEvent);
+    if (_eventThread.joinable()) {
+      _eventThread.join();
+    }
+  }
+  if (hEvent) CloseHandle(hEvent);
+  if (hControlMapFile) CloseHandle(hControlMapFile);
+  if (hDataMapFile) CloseHandle(hDataMapFile);
+}
+
+// --- ПУБЛИЧНЫЕ МЕТОДЫ ---
+void MemoryBase::WriteData(const std::vector<char>& data, const MetadataMap& metadata) {
+  if (data.size() > _dataSegmentSize) {
+    throw std::runtime_error("Размер данных превышает размер выделенного сегмента памяти.");
+  }
+
+  LPVOID pDataBuf = MapViewOfFile(hDataMapFile, FILE_MAP_ALL_ACCESS, 0, 0, _dataSegmentSize);
+  if (pDataBuf == nullptr) {
+    throw std::runtime_error("Не удалось получить View Of File для записи данных.");
+  }
+
+  ZeroMemory(pDataBuf, _dataSegmentSize);
+  CopyMemory(pDataBuf, data.data(), data.size());
+  UnmapViewOfFile(pDataBuf);
+
+  SetCommandControl(metadata);
+}
+
+MetadataMap MemoryBase::GetCommandControl() {
+  LPVOID pBuf = MapViewOfFile(hControlMapFile, FILE_MAP_READ, 0, 0, CONTROL_SIZE);
+  if (pBuf == nullptr) return {};
+
+  std::string controlStr(static_cast<char*>(pBuf));
+  UnmapViewOfFile(pBuf);
+
+  return parse_control_string(controlStr.c_str());
+}
+
+void MemoryBase::SetCommandControl(const MetadataMap& metadata) {
+  std::string controlStr = format_control_string(metadata);
+
+  LPVOID pBuf = MapViewOfFile(hControlMapFile, FILE_MAP_ALL_ACCESS, 0, 0, CONTROL_SIZE);
+  if (pBuf == nullptr) {
+    throw std::runtime_error("Не удалось получить View Of File для записи метаданных.");
+  }
+
+  ZeroMemory(pBuf, CONTROL_SIZE);
+  CopyMemory(pBuf, controlStr.c_str(), controlStr.length());
+  UnmapViewOfFile(pBuf);
+
+  ::SetEvent(hEvent);
+}
+
+void MemoryBase::ClearCommandControl() {
+  std::cout << "[Команда] Очистка контрольной памяти..." << std::endl;
+  LPVOID pBuf = MapViewOfFile(hControlMapFile, FILE_MAP_ALL_ACCESS, 0, 0, CONTROL_SIZE);
+  if (pBuf == nullptr) {
+    throw std::runtime_error("Не удалось получить View Of File для очистки.");
+  }
+  ZeroMemory(pBuf, CONTROL_SIZE);
+  UnmapViewOfFile(pBuf);
+  std::cout << "[Команда] Память очищена. Подаю сигнал." << std::endl;
+  ::SetEvent(hEvent);
+}
+
+// --- ПРИВАТНЫЕ МЕТОДЫ ---
+void MemoryBase::event_loop() {
+  while (_running.load()) {
+    if (WaitForSingleObject(hEvent, 1000) == WAIT_OBJECT_0) {
+      if (!_running.load()) break;
+
+      MetadataMap metadata = GetCommandControl();
+      if (metadata.empty()) {
+        if (_callBack) _callBack({ {}, metadata });
+        continue;
+      }
+
+      auto it = metadata.find("size");
+      size_t dataSize = (it != metadata.end()) ? std::stoul(it->second) : 0;
+      std::vector<char> data;
+
+      if (dataSize > 0) {
+        LPVOID pDataBuf = MapViewOfFile(hDataMapFile, FILE_MAP_READ, 0, 0, dataSize);
+        if (pDataBuf != nullptr) {
+          data.assign(static_cast<char*>(pDataBuf), static_cast<char*>(pDataBuf) + dataSize);
+          UnmapViewOfFile(pDataBuf);
+        }
+      }
+      if (_callBack) {
+        _callBack({ data, metadata });
+      }
+    }
+  }
+}
+
+// =========================================================================
+// === Вспомогательные функции (теперь с полной реализацией) ===
+// =========================================================================
+
+MetadataMap MemoryBase::parse_control_string(const char* control_str) {
+  MetadataMap metadata;
+  if (control_str == nullptr) return metadata;
+
+  std::string str(control_str);
+  std::stringstream ss(str);
+  std::string segment;
+
+  while (std::getline(ss, segment, ';')) {
+    if (segment.empty()) continue;
+    std::string::size_type pos = segment.find('=');
+    if (pos != std::string::npos) {
+      metadata[segment.substr(0, pos)] = segment.substr(pos + 1);
+    }
+  }
+  return metadata;
+}
+
+std::string MemoryBase::format_control_string(const MetadataMap& metadata) {
+  std::stringstream ss;
+  for (const auto& [key, val] : metadata) {
+    ss << key << "=" << val << ";";
+  }
+  return ss.str();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+#include <sstream>
+#include <system_error>
+
+// Конвертация std::string (UTF-8) в std::wstring (UTF-16) для WinAPI
+std::wstring to_wstring(const std::string& str) {
+  if (str.empty()) return std::wstring();
+  int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+  std::wstring wstr(size_needed, 0);
+  MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstr[0], size_needed);
+  return wstr;
+}
+
+MemoryBase::MemoryBase(const std::string& nameMemory, TypeBlockMemory typeBlockMemory, 
+            std::function<void(const std::vector<char>&, const std::map<std::string, std::string>&)> callBack)
+  : _nameMemoryData(nameMemory),
+  _nameMemoryDataControl(nameMemory + "Control"),
+  _callBack(callBack) {
+  // !!!!!! убрать
+  const size_t size_data_ = 64 * 1024;
+  // --- 1. Создание имен, полностью совместимых с C# ---
+  std::wstring wNameControl = to_wstring(_nameMemoryDataControl);
+  std::wstring wNameData = to_wstring(_nameMemoryData);
+
+  // C# создает событие с префиксом "Event", добавим его
+  std::wstring eventName = L"Global\\Event" + to_wstring(nameMemory);
+
+  // --- 2. Создание объектов Win32 API ---
+  hControlMapFile = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, CONTROL_SIZE, wNameControl.c_str());
+  if (hControlMapFile == NULL) {
+    throw std::runtime_error("Failed to create control file mapping.");
+  }
+
+  // Основной блок данных создается по требованию, но можно и сразу
+  hDataMapFile = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 
+    0, size_data_, wNameData.c_str());
+  if (hDataMapFile == NULL) {
+    CloseHandle(hControlMapFile);
+    throw std::runtime_error("Failed to create data file mapping.");
+  }
+
+  hEvent = CreateEventW(NULL, FALSE, FALSE, eventName.c_str()); // FALSE = AutoReset, как в C#
+  if (hEvent == NULL) {
+    CloseHandle(hControlMapFile);
+    CloseHandle(hDataMapFile);
+    throw std::runtime_error("Failed to create event.");
+  }
+
+  std::cout << "[C++] Успешно создан или открыт Event: " << nameMemory << std::endl;
+
+  if (typeBlockMemory == TypeBlockMemory::Read && _callBack) {
+    _running = true;
+    _eventThread = std::thread(&MemoryBase::event_loop, this);
+  }
+}
+
+MemoryBase::~MemoryBase() {
+  if (_running.load()) {
+    _running = false;
+    SetEvent(hEvent); // "Разбудить" поток, чтобы он завершился
+    if (_eventThread.joinable()) {
+      _eventThread.join();
+    }
+  }
+  if (hEvent) CloseHandle(hEvent);
+  if (hControlMapFile) CloseHandle(hControlMapFile);
+  if (hDataMapFile) CloseHandle(hDataMapFile);
+}
+
+void MemoryBase::SetCommandControl(const std::map<std::string, std::string>& metadata) {
+  std::string controlStr = format_control_string(metadata);
+
+  LPVOID pBuf = MapViewOfFile(hControlMapFile, FILE_MAP_ALL_ACCESS, 0, 0, CONTROL_SIZE);
+  if (pBuf == nullptr) return;
+
+  ZeroMemory(pBuf, CONTROL_SIZE);
+  CopyMemory(pBuf, controlStr.c_str(), controlStr.length());
+
+  UnmapViewOfFile(pBuf);
+
+  SetEvent(hEvent); // <--- Подача сигнала, который C# сможет "услышать"
+}
+
+void MemoryBase::event_loop() {
+  while (_running.load()) {
+    // Ждем сигнала от C# (или другого C++ процесса)
+    DWORD waitResult = WaitForSingleObject(hEvent, 1000); // 1 сек таймаут для проверки _running
+
+    if (waitResult == WAIT_OBJECT_0) {
+      if (!_running.load()) break;
+
+      // --- Чтение контрольного блока ---
+      LPVOID pControlBuf = MapViewOfFile(hControlMapFile, FILE_MAP_READ, 0, 0, CONTROL_SIZE);
+      if (pControlBuf == nullptr) continue;
+
+      std::string controlStr(static_cast<char*>(pControlBuf));
+      UnmapViewOfFile(pControlBuf);
+
+      auto metadata = parse_control_string(controlStr.c_str());
+      if (metadata.find("size") == metadata.end()) continue;
+
+      size_t dataSize = std::stoul(metadata["size"]);
+      if (dataSize == 0) {
+        if (_callBack) _callBack({}, metadata); // Вызываем колбэк с пустыми данными
+        continue;
+      }
+
+      // --- Чтение основного блока данных ---
+      LPVOID pDataBuf = MapViewOfFile(hDataMapFile, FILE_MAP_READ, 0, 0, dataSize);
+      if (pDataBuf == nullptr) continue;
+
+      std::vector<char> data(dataSize);
+      CopyMemory(data.data(), pDataBuf, dataSize);
+      UnmapViewOfFile(pDataBuf);
+
+      if (_callBack) {
+        _callBack(data, metadata);
+      }
+    }
+  }
+}
+
+// Ваши вспомогательные функции парсинга/форматирования (остаются без изменений)
+std::map<std::string, std::string> MemoryBase::parse_control_string(const char* control_str) {
+  std::map<std::string, std::string> metadata;
+  std::string str(control_str);
+  std::stringstream ss(str);
+  std::string segment;
+  while (std::getline(ss, segment, ';')) {
+    if (segment.empty()) continue;
+    std::string::size_type pos = segment.find('=');
+    if (pos != std::string::npos) {
+      metadata[segment.substr(0, pos)] = segment.substr(pos + 1);
+    }
+  }
+  return metadata;
+}
+
+std::string MemoryBase::format_control_string(const std::map<std::string, std::string>& metadata) {
+  std::stringstream ss;
+  for (auto const& [key, val] : metadata) {
+    ss << key << "=" << val << ";";
+  }
+  return ss.str();
+}
+*/
+
+
+/*
+
 #include "memory_base.h"
 #include <sstream> // Для std::stringstream
 #include <boost/date_time/posix_time/posix_time_duration.hpp>
@@ -206,3 +558,4 @@ void MemoryBase::destroy() const
 {
   Destroy(_nameMemoryData);
 }
+*/

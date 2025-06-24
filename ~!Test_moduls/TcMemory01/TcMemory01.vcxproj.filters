@@ -24,17 +24,8 @@
     <ClCompile Include="src\memory_base.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\duplex_memory.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="src\cuda_node.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="MemoryBaseXXX.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="src\TestYaml.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
@@ -42,12 +33,6 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="src\CudaTemperature.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="src\duplex_memory.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="src\cuda_node.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
