@@ -1,7 +1,5 @@
 ﻿// main.cpp
-#include "src/cuda_memory.h" // Ваш существующий класс
-//#include "/SharedDataTypes.h"
-
+//#include "src/cuda_memory.h" // Ваш существующий класс
 
 #include <iostream>
 #include <thread>
@@ -11,40 +9,44 @@
 #ifdef unpack
 #undef unpack
 #endif
-#include "MemoryData/memory_nome.h"
-//#include "MemoryData/SharedDataTypes.h"
 
 #include "src/cuda_memory.h"
-#include <iostream>
-#include <thread>
-#include <chrono>
+
 
 int main() {
-  std::cout << "--- C++ КЛИЕНТ ЗАПУЩЕН (Архитектура с интерфейсом) ---\n";
+  std::cout << "--- C++ КЛИЕНТ ЗАПУЩЕН (Тест с квитированием) ---\n";
+  const std::string channelName = "Cuda";
 
   try {
-    // 1. Создаем наш высокоуровневый обработчик. Вся настройка скрыта внутри.
-    CudaMemory client("Cuda", ServerClient::Client);
+    CudaMemory client(channelName, ServerClient::Client);
 
-    // 2. Создаем и отправляем данные через простой и понятный метод.
-    std::vector<CudaVector> vectors_to_send = {
-        { eCudaVector, {1.1, 2.2, 3.3} },
-        { eCudaVector, {4.4, 5.5, 6.6} }
-    };
-    client.SendVectors(vectors_to_send);
+    // --- ТЕСТ: Отправка двух пакетов данных с ожиданием ---
 
-    // 3. Ожидаем ответа.
-    int timeout_seconds = 5;
-    for (int i = 0; i < timeout_seconds * 10; ++i) {
-      if (client.WasAckReceived()) break;
+    // Пакет 1
+    std::cout << "\n--- Отправка Пакета 1 ---\n";
+    std::vector<CudaVector> vectors1 = { {eCudaVector, {1.1, 2.2}} };
+    client.SendCudaVectors(vectors1);
+
+    // Ждем, пока сервер прочитает и очистит контрольный блок
+    std::cout << "[MAIN] Ожидание, пока сервер обработает Пакет 1...\n";
+    for (int i = 0; i < 50; ++i) { // Ждем до 5 секунд
+      if (client.IsWriteChannelReady()) {
+        std::cout << "[MAIN] Сервер обработал Пакет 1. Канал готов.\n";
+        break;
+      }
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    if (client.WasAckReceived()) {
-      std::cout << "\n[MAIN] Тест успешно завершен!\n";
+    if (!client.IsWriteChannelReady()) {
+      std::cout << "[MAIN] ОШИБКА: Сервер не обработал Пакет 1 за 5 секунд.\n";
+      // Здесь можно включить "другой алгоритм", как ты и хотел.
     }
     else {
-      std::cout << "\n[MAIN] ОШИБКА: Подтверждение от сервера не получено.\n";
+      // Пакет 2
+      std::cout << "\n--- Отправка Пакета 2 ---\n";
+      std::vector<CudaValue> values2 = { {eCudaValue, 99.9} };
+      client.SendCudaValues(values2);
+      std::cout << "[MAIN] Пакет 2 отправлен.\n";
     }
 
   }
@@ -52,7 +54,7 @@ int main() {
     std::cerr << "Критическая ошибка в main: " << e.what() << std::endl;
   }
 
-  std::cout << "Нажмите Enter для выхода.\n";
+  std::cout << "\nНажмите Enter для выхода.\n";
   std::cin.get();
   return 0;
 }
