@@ -73,6 +73,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>E:\C++\OpenCL\yaml-cpp-master\include;F:\C++\Boost\boost_1_87_0;F:\C++\Boost\vcpkg\installed\x64-windows\include;$(IncludePath)</IncludePath>
     <LibraryWPath>E:\C++\OpenCL\yaml-cpp-master\build\Debug;F:\C++\Boost\boost_1_87_0\stage\lib;F:\C++\Boost\vcpkg\installed\x64-windows\debug\lib;$(LibraryWPath)</LibraryWPath>
+    <LibraryPath>E:\C++\OpenCL\yaml-cpp-master\build\Debug;F:\C++\Boost\boost_1_87_0\stage\lib;F:\C++\Boost\vcpkg\installed\x64-windows\debug\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>F:\C++\Boost\boost_1_87_0;F:\C++\Boost\vcpkg\installed\x64-windows\include;$(IncludePath)</IncludePath>

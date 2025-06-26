@@ -67,3 +67,8 @@ void CudaMemory::SendProcessedData(std::vector<CudaTemperature> data) {
   // Сериализуем и отправляем измененные данные
   SendData(data);
 }
+
+// Реализация нового метода
+void CudaMemory::SendDataRaw(const std::vector<uint8_t>& bytes, const MetadataMap& metadata) {
+  _memoryNome->WriteDataToMemory(bytes, metadata);
+}
