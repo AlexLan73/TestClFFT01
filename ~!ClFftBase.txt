@@ -5,7 +5,7 @@ namespace std
     class type_index;
 }
 
-my_fft::ClFftBase::ClFftBase()
+wrapper::ClFftBase::ClFftBase()
 {
     err_ = clGetPlatformIDs(1, &platform_, nullptr);
     if (err_ != CL_SUCCESS) throw std::runtime_error("Failed to get platform");
@@ -36,7 +36,7 @@ my_fft::ClFftBase::ClFftBase()
     };
 }
 
-void my_fft::ClFftBase::load_data(std::unique_ptr<std::any> data, size_t n, size_t m)
+void wrapper::ClFftBase::load_data(std::unique_ptr<std::any> data, size_t n, size_t m)
 {
     n_ = n;
     m_ = m;
@@ -105,7 +105,7 @@ void my_fft::ClFftBase::load_data(std::unique_ptr<std::any> data, size_t n, size
 }
 
 
-void my_fft::ClFftBase::func_plan()
+void wrapper::ClFftBase::func_plan()
 {
     // 5. ������� ���� FFT
     err_ = clfftCreateDefaultPlan(&plan_, context_, CLFFT_1D, &n_);
@@ -121,14 +121,14 @@ void my_fft::ClFftBase::func_plan()
 
 }
 
-void my_fft::ClFftBase::process_type(const std::type_info& type) {
+void wrapper::ClFftBase::process_type(const std::type_info& type) {
     if (const auto it = typeActions_.find(std::type_index(type)); it != typeActions_.end()) 
         it->second(); // Вызов соответствующей функции
     else
         throw std::runtime_error("Error return Class or Struct. ");
 }
 
-calc_time_opencl my_fft::ClFftBase::calc_Time_OpenCl(cl_event event)
+calc_time_opencl wrapper::ClFftBase::calc_Time_OpenCl(cl_event event)
 {
     cl_ulong start = 0, end = 0;
     cl_ulong queued = 0, submit = 0;
@@ -156,7 +156,7 @@ calc_time_opencl my_fft::ClFftBase::calc_Time_OpenCl(cl_event event)
  */
 
 
-void my_fft::ClFftBase::read_data(std::any& t)
+void wrapper::ClFftBase::read_data(std::any& t)
 {
     process_type(t.type());
     system_clock::time_point t_start = system_clock::now();
@@ -293,7 +293,7 @@ void my_fft::ClFftBase::read_data(std::any& t)
 }
 
 
-my_fft::ClFftBase::~ClFftBase()
+wrapper::ClFftBase::~ClFftBase()
 {
     // 9. ����������� OpenCL �������
     clReleaseMemObject(buffer_);
@@ -302,7 +302,7 @@ my_fft::ClFftBase::~ClFftBase()
 
 }
 
-string my_fft::ClFftBase::time_average_value(system_clock::time_point* t_start, system_clock::time_point* t_end)
+string wrapper::ClFftBase::time_average_value(system_clock::time_point* t_start, system_clock::time_point* t_end)
 {
     //system_clock::time_point tstart = system_clock::now();
     //std::this_thread::sleep_for(milliseconds(1000));
@@ -335,15 +335,15 @@ string my_fft::ClFftBase::time_average_value(system_clock::time_point* t_start, 
 }
 
 
-void my_fft::ClFftBase::print_data_test(data_fft data)
+void wrapper::ClFftBase::print_data_test(data_fft data)
 {
 }
 
-void my_fft::ClFftBase::print_data_test(fft_data_time data)
+void wrapper::ClFftBase::print_data_test(fft_data_time data)
 {
 }
 
-void my_fft::ClFftBase::print_data_test(calc_time_opencl times)
+void wrapper::ClFftBase::print_data_test(calc_time_opencl times)
 {
 }
 

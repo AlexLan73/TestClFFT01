@@ -19,22 +19,31 @@
     <Filter Include="Исходные файлы\src\fft">
       <UniqueIdentifier>{f5a26d19-3bb6-42e6-b6df-7f38db5b82df}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Исходные файлы\src\sockets">
+      <UniqueIdentifier>{cbf12792-ea3e-48fa-8a98-3306eac0d11f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Исходные файлы\src\sockets\Test">
+      <UniqueIdentifier>{8df5304b-bb43-4065-907c-53fcbafdb5c7}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="TestClFFT01.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="src\fft\Wrapper_clFFT.cpp">
-      <Filter>Исходные файлы\src\fft</Filter>
-    </ClCompile>
     <ClCompile Include="src\fft\cl_fft_base.cpp">
       <Filter>Исходные файлы\src\fft</Filter>
     </ClCompile>
+    <ClCompile Include="src\streams_sockets.cpp">
+      <Filter>Исходные файлы\src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\sockets\DuplexNode.cpp">
+      <Filter>Исходные файлы\src\sockets</Filter>
+    </ClCompile>
+    <ClCompile Include="src\sockets\Test\socket_test.cpp">
+      <Filter>Исходные файлы\src\sockets\Test</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\fft\Wrapper_clFFT.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="src\fft\cl_fft_base.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
@@ -54,6 +63,18 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="src\fft\a_print_base.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\sockets\DuplexNode.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\streams_sockets.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\wrap_thread.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\sockets\Test\socket_test.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

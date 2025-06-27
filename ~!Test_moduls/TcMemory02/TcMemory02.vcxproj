@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{6497dd00-7a0b-45f2-b543-38613edc12e8}</ProjectGuid>
-    <RootNamespace>TestClFFT01</RootNamespace>
+    <ProjectGuid>{507e57f0-84fc-4ed5-ab62-8e4f859c8eac}</ProjectGuid>
+    <RootNamespace>TcMemory02</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -71,12 +71,11 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>F:\C++\Boost\boost_1_87_0;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\include;E:\C++\OpenCL\clFFT\src\include;$(IncludePath)</IncludePath>
-    <LibraryPath>F:\C++\Boost\boost_1_87_0\stage\lib;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\lib\x64;E:\C++\OpenCL\clFFT\src\library\Debug;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\lib\x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>E:\C++\OpenCL\yaml-cpp-master\include;F:\C++\Boost\boost_1_87_0;F:\C++\Boost\vcpkg\installed\x64-windows\include;$(IncludePath)</IncludePath>
+    <LibraryPath>E:\C++\OpenCL\yaml-cpp-master\build\Debug;F:\C++\Boost\boost_1_87_0\stage\lib;F:\C++\Boost\vcpkg\installed\x64-windows\debug\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>F:\C++\Boost\boost_1_87_0;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\include;E:\C++\OpenCL\clFFT\src\include;$(IncludePath)</IncludePath>
-    <LibraryPath>F:\C++\Boost\boost_1_87_0\stage\lib;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\lib\x64;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\lib\x64;E:\C++\OpenCL\clFFT\src\library\Release;$(LibraryPath)</LibraryPath>
+    <IncludePath>E:\C++\OpenCL\yaml-cpp-master\include;F:\C++\Boost\boost_1_87_0;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -108,20 +107,18 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN_DEBUG</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>E:\C++\OpenCL\clFFT\src\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>E:\C++\OpenCL\MemoryData\include;E:\C++\OpenCL\MemoryData\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>F:\C++\Boost\boost_1_87_0\stage;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\lib\x64;E:\C++\OpenCL\clFFT\src\library\Debug;E:\C++\OpenCL\clFFT\src\staging\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>OpenCl.lib;clFFT.lib;nvml.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>E:\C++\OpenCL\yaml-cpp-master\build\Debug;F:\C++\Boost\boost_1_87_0\stage;F:\C++\Boost\vcpkg\installed\x64-windows\debug\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>yaml-cppd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
-    <PreBuildEvent>
-      <Command>xcopy /Y /F "E:\C++\OpenCL\clFFT\src\staging\Debug\clFFT.dll" "$(OutDir)"</Command>
-    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -129,44 +126,32 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN_DEBUG</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>E:\C++\OpenCL\MemoryData\include;</AdditionalIncludeDirectories>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>F:\C++\Boost\boost_1_87_0\stage;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\lib\x64;E:\C++\OpenCL\clFFT\src\library\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>OpenCl.lib;clFFT.lib;nvml.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\fft\cl_fft_base.cpp" />
-    <ClCompile Include="src\sockets\DuplexNode.cpp" />
-    <ClCompile Include="src\sockets\Test\socket_test.cpp" />
-    <ClCompile Include="src\streams_sockets.cpp" />
-    <ClCompile Include="TestClFFT01.cpp" />
+    <ClCompile Include="src\cuda_memory.cpp" />
+    <ClCompile Include="TcMemory02.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\clFFT\src\include\clFFT.h" />
-    <ClInclude Include="src\fft\a_print_base.h" />
-    <ClInclude Include="src\fft\CalcTimeOpenCl.h" />
-    <ClInclude Include="src\fft\SDataTimes.h" />
-    <ClInclude Include="src\fft\cl_fft_base.h" />
-    <ClInclude Include="src\fft\data_fft.h" />
-    <ClInclude Include="src\fft\fft_data_time.h" />
-    <ClInclude Include="src\sockets\DuplexNode.h" />
-    <ClInclude Include="src\sockets\Test\socket_test.h" />
-    <ClInclude Include="src\streams_sockets.h" />
-    <ClInclude Include="src\wrap_thread.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="src\cuda_memory.h" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\clFFT\src\library\clFFT.vcxproj">
-      <Project>{f2d57c80-cebf-3c83-a551-cad7d77df9a0}</Project>
+    <ResourceCompile Include="TcMemory02.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\MemoryData\MemoryData.vcxproj">
+      <Project>{89d8988d-305b-4f68-86e5-fca1a45e2cea}</Project>
     </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="~!ClFftBase.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
